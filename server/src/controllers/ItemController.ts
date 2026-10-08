@@ -172,6 +172,18 @@ export async function updateItem(req: Request, res: Response) {
             updates.image = image;
         }
 
+        if (stock !== undefined) {
+            const existing = await prisma.item.findUnique({ where: { id }, select: { held: true } });
+            if (!existing) {
+                res.status(404).json({ message: "Item not found" });
+                return;
+            }
+            if (stock < existing.held) {
+                res.status(409).json({ message: `${existing.held} units are held by reservations` });
+                return;
+            }
+        }
+
         if (title) {
             const conflict = await prisma.item.findFirst({ where: { title, NOT: { id } } });
             if (conflict) {
@@ -209,6 +221,15 @@ export async function deleteItem(req: Request, res: Response) {
             return;
         }
 
+        if (existing.held > 0) {
+            res.status(409).json({ message: `${existing.held} units are held by reservations` });
+            return;
+        }
+        if (await prisma.reservation.count({ where: { itemId: id } })) {
+            res.status(409).json({ message: "This piece has reservation history; set its stock to 0 instead of deleting" });
+            return;
+        }
+
         if (existing.image) {
             await deleteLocalImage(existing.image).catch((err) => {
                 console.error("Failed to delete image:", err);
@@ -241,6 +262,10 @@ export async function adjustStock(req: Request, res: Response) {
         const newStock = item.stock + quantity;
         if (newStock < 0) {
             res.status(400).json({ message: "Insufficient stock" });
+            return;
+        }
+        if (newStock < item.held) {
+            res.status(409).json({ message: `${item.held} units are held by reservations` });
             return;
         }
 

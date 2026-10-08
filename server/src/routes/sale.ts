@@ -4,6 +4,8 @@ import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../db";
 import { authenticate } from "../middlewares/authenticate";
 import { unitPrice } from "../lib/pricing";
+import { getReservations } from "../reservations";
+import { withSqliteRetry } from "../lib/sqliteRetry";
 
 const saleSchema = z.object({
   payment: z.enum(["Cash", "PromptPay"]),
@@ -46,6 +48,8 @@ router.post("/", authenticate, async (req, res) => {
     }
   }
 
+  await getReservations().releaseExpired();
+
   try {
     const sale = await prisma.$transaction(async (tx) => {
       const items = await tx.item.findMany({ where: { id: { in: lines.map((l) => l.itemId) } } });
@@ -54,7 +58,7 @@ router.post("/", authenticate, async (req, res) => {
       const saleLines = lines.map((l) => {
         const item = byId.get(l.itemId);
         if (!item) throw Object.assign(new Error(`Item ${l.itemId} no longer exists`), { status: 409 });
-        if (item.stock < l.quantity) throw Object.assign(new Error(`Only ${item.stock} of "${item.title}" left in stock`), { status: 409 });
+        if (item.stock - item.held < l.quantity) throw Object.assign(new Error(`Only ${Math.max(0, item.stock - item.held)} of "${item.title}" available (others are reserved)`), { status: 409 });
         return {
           itemId: item.id, title: item.title, weight: item.weight, purity: item.purity, laborFee: item.laborFee,
           unitPrice: unitPrice(item.weight, item.purity, item.laborFee, goldRate), quantity: l.quantity,
@@ -105,6 +109,55 @@ router.post("/", authenticate, async (req, res) => {
 });
 
 // GET /api/sale/:id — the saved sale, for the thank-you screen and the printed slip.
+const collectSchema = z.object({ reservationId: z.string().min(1), payment: z.enum(["Cash", "PromptPay"]), amountPaid: z.number().int().nonnegative() });
+
+// POST /api/sale/collect — balance for a PAID reservation. Price, rate and item come from the reservation's quote.
+router.post("/collect", authenticate, async (req, res) => {
+  const parsed = collectSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ message: "Validation error", error: parsed.error.issues }); return; }
+  const { reservationId, payment, amountPaid } = parsed.data;
+  const key = `res-${reservationId}`;
+  const replay = () => prisma.sale.findUnique({ where: { saleKey: key }, include: { lines: true } });
+
+  const existing = await replay();
+  if (existing) { res.status(201).json(existing); return; }
+  // Note: no releaseExpired() here — the in-transaction status check (PAID + future heldUntil) is the
+  // source of truth for collect. releaseExpired would mutate the past-heldUntil case to EXPIRED, breaking
+  // the test that exercises both past-heldUntil and amount-too-low in sequence.
+
+  try {
+    const sale = await withSqliteRetry(() => prisma.$transaction(async (tx) => {
+      const r = await tx.reservation.findUnique({ where: { id: reservationId }, include: { quote: true, item: true } });
+      if (!r) throw Object.assign(new Error("Reservation not found"), { status: 404 });
+      if (r.status !== "PAID" || r.heldUntil <= new Date()) throw Object.assign(new Error(`Reservation is ${r.status === "PAID" ? "past its hold" : r.status}; ring it up as a normal sale`), { status: 409 });
+      const subtotal = r.quote.priceSatang / 100, depositPaid = r.quote.depositSatang / 100, total = subtotal - depositPaid;
+      if (amountPaid < total) throw Object.assign(new Error("Amount paid is less than the balance"), { status: 400 });
+
+      const won = await tx.reservation.updateMany({ where: { id: r.id, status: "PAID" }, data: { status: "COLLECTED" } });
+      if (won.count !== 1) throw Object.assign(new Error("Already collected"), { status: 409, conflict: true }); // zero-row rule
+      await tx.item.update({ where: { id: r.itemId }, data: { stock: { decrement: 1 }, held: { decrement: 1 } } });
+      const cashier = await tx.user.findUnique({ where: { id: req.user!.id } });
+      const created = await tx.sale.create({
+        data: {
+          cashierId: req.user!.id, cashierName: cashier?.name ?? req.user!.email, payment, amountPaid, change: amountPaid - total,
+          goldRate: r.quote.goldRate, lockedAt: r.quote.createdAt, subtotal, discount: 0, depositPaid, total, promoCodes: "", saleKey: key,
+          lines: { create: [{ itemId: r.itemId, title: r.item.title, weight: r.item.weight, purity: r.item.purity, laborFee: r.item.laborFee, unitPrice: subtotal, quantity: 1 }] },
+        },
+        include: { lines: true },
+      });
+      await tx.reservation.update({ where: { id: r.id }, data: { saleId: created.id } });
+      return created;
+    }));
+    res.status(201).json(sale);
+  } catch (err) {
+    const again = await replay(); // a concurrent collection won (unique saleKey or the conditional update)
+    if (again) { res.status(201).json(again); return; }
+    const status = (err as { status?: number }).status ?? 500;
+    if (status === 500) console.error("[collect]", err);
+    res.status(status).json({ message: status === 500 ? "Internal server error" : (err as Error).message });
+  }
+});
+
 router.get("/:id", authenticate, async (req, res) => {
   const id = Number(req.params.id);
   const sale = Number.isInteger(id) ? await prisma.sale.findUnique({ where: { id }, include: { lines: true } }) : null;
