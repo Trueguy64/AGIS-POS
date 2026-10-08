@@ -1,6 +1,6 @@
 # Agentic Reservations — Design
 
-Date: 2026-10-08 · Status: draft for review (rev 3) · Target: PayPal AI Hackathon (Devpost), submission deadline 2026-11-12 12:00 PT
+Date: 2026-10-08 · Status: approved (rev 4) · Target: PayPal AI Hackathon (Devpost), submission deadline 2026-11-12 12:00 PT
 
 ## 1. Intent
 
@@ -94,6 +94,7 @@ model Reservation {
   item          Item     @relation(fields: [itemId], references: [id])
   customerName  String
   contact       String
+  clientIp      String?  // req.ip (with trust proxy) for the per-IP PENDING limit
   status        String   // PENDING | CAPTURING | PAID | REVIEW | COLLECTED | EXPIRED | CANCELLED
   paypalOrderId String?  @unique
   captureStatus String?  // PayPal capture status as last seen
@@ -127,7 +128,7 @@ Available units of an item = `stock - held`. Statuses that hold a unit: `PENDING
 - `messages`: only `{ role: "user" | "assistant", content: string }` entries are accepted; any other role or non-string content is a 400. This keeps a browser from injecting fake tool calls or tool results.
 - Caps: at most 20 messages of history, each at most 1,000 characters (400 otherwise); at most 5 tool calls per turn.
 - `activeQuoteId`: the quote shown on the page, if any. The server loads it and, if it exists, has not expired and has no reservation yet, adds a short system note for this turn ("Active quote Q: item, price, deposit, expires at …"), so the model can call `createReservation` with it on a later turn without the id surviving in chat text. An unknown, expired or already-used id is dropped silently. The page clears `activeQuoteId` when a response carries a `reservation`.
-- Holding limits: at most one `createReservation` call per turn (further calls in the same turn are refused with a tool error), and at most two `PENDING` / `CAPTURING` reservations per client IP at a time.
+- Holding limits: at most one `createReservation` call per turn (further calls in the same turn are refused with a tool error), and at most two `PENDING` / `CAPTURING` reservations per client IP at a time, counted on `Reservation.clientIp` (from `req.ip`, correct once `trust proxy` is set) after the expiry release has run, so lapsed reservations do not count.
 
 **Response.** `{ reply: string, quote?: QuoteCard, reservation?: { reservationId, paypalOrderId, currency } }`. `quote` and `reservation` are built on the server from the tool results of this turn; the page renders the card and the PayPal button only from these fields.
 
@@ -155,7 +156,8 @@ Available units of an item = `stock - held`. Statuses that hold a unit: `PENDING
 4. Status `CAPTURING` (another caller holds the claim, or an earlier attempt ended unknown): call `getOrder` only.
    - Order `COMPLETED`: settle (step 7).
    - Order `APPROVED` and the claim is stale (`updatedAt` older than `CAPTURE_STALE_SECONDS`): take over the claim with a conditional update that bumps `updatedAt` (`where status = CAPTURING and updatedAt = <value read>`); if it changed one row, go to step 6, otherwise return.
-   - Order `APPROVED` and the claim is fresh, or any other order status: return the reservation unchanged (the first caller is still working).
+   - Order neither `COMPLETED` nor `APPROVED` (e.g. `VOIDED`, or `getOrder` returns 404) and the claim is stale: conditional update `CAPTURING → REVIEW` (where `status = CAPTURING and updatedAt = <value read>`); the hold stays and staff accept or cancel it (4.5).
+   - Otherwise (order `APPROVED` with a fresh claim, or any status with a fresh claim): return the reservation unchanged (the first caller is still working).
 5. Status `PENDING`: claim the capture with a conditional update `PENDING → CAPTURING` where `status = PENDING` and `heldUntil > now()`.
    - If no row changed and `heldUntil` has passed: run expiry release for it (→ `CANCELLED`, hold released) and return; the approved PayPal order lapses.
    - If no row changed otherwise, another caller won: reload and return the current status.
@@ -170,7 +172,7 @@ Available units of an item = `stock - held`. Statuses that hold a unit: `PENDING
 
 Every status change above is conditional on the status read in that step, so concurrent captures, "Check payment" and expiry cannot both apply a transition, and only one caller at a time can call `captureOrder`.
 
-The capture route returns the reservation status; `/reserve` shows paid (`PAID`), processing (`CAPTURING`: "Payment received, confirming with PayPal", polls the status every 5 seconds for up to 2 minutes), needs review (`REVIEW`: "Payment received; the shop will confirm"), failed (`PENDING` after a refusal), or expired (`CANCELLED` / `EXPIRED`).
+The capture route returns the reservation status; `/reserve` shows paid (`PAID`), processing (`CAPTURING`: "Payment received, confirming with PayPal", polls by re-sending `POST /reservation/:id/capture` every 5 seconds for up to 2 minutes; the call is safe to repeat, and once the claim is stale the customer's own poll can take it over), needs review (`REVIEW`: "Payment received; the shop will confirm"), failed (`PENDING` after a refusal), or expired (`CANCELLED` / `EXPIRED`).
 
 ### 4.4 Collect
 
@@ -237,6 +239,7 @@ Runner: Node's built-in `node:test` via `tsx` (already a server dev dependency);
    - Self-hold: capture of a valid PENDING reservation when `stock - held = 0` proceeds.
    - **CAPTURING race:** fake PayPal delays the capture; expiry runs during the delay with the clock past `heldUntil`; the reservation ends `PAID` with `held` unchanged.
    - **Overlapping captures:** two capture calls overlap; fake PayPal is slow on the first and rejects any second capture call; only one `captureOrder` call is made (the second caller only calls `getOrder`), and the reservation ends `PAID`.
+   - Stale claim on a lapsed order: `getOrder` returns `VOIDED` (and, separately, 404) with a stale claim → `REVIEW`, hold kept; with a fresh claim → unchanged.
    - Stale takeover: claim older than `CAPTURE_STALE_SECONDS` with order `APPROVED` → exactly one caller re-captures with the same request id.
    - Unknown outcome: fake capture times out → `CAPTURING` remains, hold kept; "Check payment" with `getOrder` → `COMPLETED` settles to `PAID` without a second capture call.
    - 4.3 step 4 branches: `getOrder` `COMPLETED` settles without capturing; `APPROVED` with a fresh claim leaves the reservation unchanged; any other status leaves it unchanged.
