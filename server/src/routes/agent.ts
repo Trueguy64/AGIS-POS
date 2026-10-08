@@ -13,6 +13,12 @@ const chatSchema = z.object({
   activeQuoteId: z.string().max(100).optional(),
 });
 
+/** Drop leading non-user messages (e.g. a prepended assistant greeting). */
+export function trimToFirstUser<T extends { role: string }>(messages: T[]): T[] {
+  const i = messages.findIndex((m) => m.role === "user");
+  return i < 0 ? [] : messages.slice(i);
+}
+
 async function searchCatalog({ query, maxPriceTHB }: { query: string; maxPriceTHB?: number }) {
   await getReservations().releaseExpired();
   const rate = await getGoldRate();
@@ -32,13 +38,15 @@ let agent: ReturnType<typeof createAgent> | null = null;
 router.post("/chat", rateLimit({ windowMs: 10 * 60_000, max: 20 }), async (req, res) => {
   const parsed = chatSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ message: "Invalid chat request" }); return; }
+  const messages = trimToFirstUser(parsed.data.messages);
+  if (messages.length === 0) { res.status(400).json({ message: "Invalid chat request" }); return; }
   agent ??= createAgent({
     call: createModel({ baseUrl: process.env.AI_BASE_URL ?? "", apiKey: process.env.AI_API_KEY ?? "", model: process.env.AI_MODEL ?? "minimax-m3" }),
     reservations: getReservations(),
     searchCatalog,
   });
   try {
-    res.json(await agent.chat({ ...parsed.data, clientIp: req.ip }));
+    res.json(await agent.chat({ ...parsed.data, messages, clientIp: req.ip }));
   } catch (e) {
     if (e instanceof ModelUnavailable) { res.status(503).json({ message: "The assistant is unavailable, please try again shortly." }); return; }
     throw e;

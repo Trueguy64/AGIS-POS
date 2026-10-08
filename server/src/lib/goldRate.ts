@@ -1,5 +1,6 @@
 export const GRAMS_PER_TROY_OUNCE = 31.1035;
 const TTL_MS = 60_000;
+const FRESH_TIMEOUT_MS = 10_000;
 
 export type GoldRate = { usdPerOunce: number; usdToThb: number; thbPerGram: number; updatedAt: string };
 
@@ -7,8 +8,8 @@ let cache: { rate: GoldRate; at: number } | null = null;
 
 async function fetchRate(): Promise<GoldRate> {
   const [xau, fx] = await Promise.all([
-    fetch("https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD").then((r) => r.json()),
-    fetch("https://api.frankfurter.app/latest?from=USD&to=THB").then((r) => r.json()), // ECB reference rate
+    fetch("https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD", { signal: AbortSignal.timeout(FRESH_TIMEOUT_MS) }).then((r) => r.json()),
+    fetch("https://api.frankfurter.app/latest?from=USD&to=THB", { signal: AbortSignal.timeout(FRESH_TIMEOUT_MS) }).then((r) => r.json()), // ECB reference rate
   ]);
   const usdPerOunce = Number(xau?.[1]?.spreadProfilePrices?.[1]?.ask);
   const usdToThb = Number(fx?.rates?.THB);
@@ -30,4 +31,11 @@ export async function getGoldRate(): Promise<GoldRate> {
     console.error("Gold rate fetch failed, serving cached:", err);
   }
   return cache.rate;
+}
+
+/** Like {@link getGoldRate} but throws if the cached rate's fetch time is older than `maxAgeMs`. */
+export async function getGoldRateFresh(maxAgeMs = 10 * 60_000, now: () => number = Date.now): Promise<GoldRate> {
+  const rate = await getGoldRate();
+  if (!cache || now() - cache.at > maxAgeMs) throw new Error("Gold rate is stale");
+  return rate;
 }

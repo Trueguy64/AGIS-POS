@@ -191,3 +191,37 @@ test("review actions: accept → PAID with new hold; cancel → CANCELLED releas
   assert.equal((await svc.cancelReview(rid)).status, "CANCELLED");
   assert.equal(await held(), 0);
 });
+
+test("checkPayment: PENDING + getOrder CREATED → no capture, status PENDING", async () => {
+  fake.pp.script("getOrder", async () => ({ kind: "ok", value: { orderStatus: "CREATED" } } as const));
+  const r = await svc.checkPayment(rid);
+  assert.equal(r.status, "PENDING");
+  assert.equal(captures(), 0);
+  assert.equal(await held(), 1);
+});
+
+test("checkPayment: PENDING + getOrder APPROVED → captureOrder called, PAID", async () => {
+  fake.pp.script("getOrder", async () => ({ kind: "ok", value: { orderStatus: "APPROVED" } } as const));
+  const r = await svc.checkPayment(rid);
+  assert.equal(r.status, "PAID");
+  assert.equal(captures(), 1);
+  assert.equal(await held(), 1);
+});
+
+test("checkPayment: PENDING + getOrder COMPLETED → delegates to captureReservation → PAID via getOrder settle, no second captureOrder", async () => {
+  fake.pp.script("getOrder", async () => ({ kind: "ok", value: fake.paid(449300) } as const));
+  fake.pp.script("captureOrder", async () => ({ kind: "refused", status: 422, issue: "ORDER_ALREADY_CAPTURED" } as const));
+  const r = await svc.checkPayment(rid);
+  assert.equal(r.status, "PAID");
+  assert.equal(captures(), 1);
+});
+
+test("checkPayment: PAID → delegates to captureReservation, no PayPal calls", async () => {
+  await prisma.reservation.update({ where: { id: rid }, data: { status: "PAID" } });
+  assert.equal((await svc.checkPayment(rid)).status, "PAID");
+  assert.equal(fake.pp.calls.length, 0);
+});
+
+test("checkPayment: missing reservation → NOT_FOUND", async () => {
+  await assert.rejects(svc.checkPayment("nope"), (e: Error) => e.message === "Reservation not found");
+});

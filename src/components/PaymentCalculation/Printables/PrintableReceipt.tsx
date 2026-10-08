@@ -39,6 +39,12 @@ export default function PrintableReceipt({ sale }: Props) {
                             <td className="w-32 py-1 text-right tabular-nums">−{thb(sale.discount)}</td>
                         </tr>
                     )}
+                    {(sale.depositPaid ?? 0) > 0 && (
+                        <tr>
+                            <td colSpan={4} className="py-1 pr-6 text-right text-ink-soft">{row("depositPaid")}</td>
+                            <td className="w-32 py-1 text-right tabular-nums">−{thb(sale.depositPaid ?? 0)}</td>
+                        </tr>
+                    )}
                     <tr>
                         <td colSpan={4} className="pr-6 pt-3 text-right text-display font-bold">{th("total")} <span className="text-compact font-normal text-ink-muted">{en("total")}</span></td>
                         <td className="w-32 pt-3 text-right text-display font-bold tabular-nums">{thb(sale.total)}</td>

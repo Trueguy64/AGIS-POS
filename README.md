@@ -74,7 +74,7 @@ Spec first, then code, then UI.
 ## Architecture
 
 ```
-/reserve (public React page) ──POST /agent/chat──▶ agent/ (tool loop, Anthropic SDK → MiniMax)
+/reserve (public React page) ──POST /agent/chat──▶ agent/ (tool loop, fetch-based Messages API client → MiniMax)
       │                                                │ tools: searchCatalog, quotePrice, createReservation
       │                                                ▼
       │                                          reservations/ (Quote, Reservation, holds) ──▶ paypal/ (Orders v2)

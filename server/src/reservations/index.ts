@@ -1,6 +1,6 @@
 import { prisma } from "../db";
 import { createPayPal } from "../paypal/client";
-import { getGoldRate } from "../lib/goldRate";
+import { getGoldRateFresh } from "../lib/goldRate";
 import { createReservations, configFromEnv } from "./service";
 
 let instance: ReturnType<typeof createReservations> | null = null;
@@ -10,7 +10,7 @@ export function getReservations() {
     prisma,
     paypal: createPayPal({ clientId: process.env.PAYPAL_CLIENT_ID ?? "", secret: process.env.PAYPAL_SECRET ?? "", base: process.env.PAYPAL_BASE }),
     now: () => new Date(),
-    getRate: getGoldRate,
+    getRate: getGoldRateFresh,
     config: configFromEnv(),
   });
   return instance;

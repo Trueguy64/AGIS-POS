@@ -37,14 +37,17 @@ Sign in at `/login`, then open `/reservations` to see the table of recent bookin
 
 ## How reservations behave
 
-- A `PAID` reservation is held for **48 hours of real time** from creation. After that, the
-  staff-side expiry sweep flips it to `EXPIRED` and the held stock returns to the catalog.
+- A `PAID` reservation is held for **48 hours of real time** starting when the deposit is paid. After
+  that, the staff-side expiry sweep flips it to `EXPIRED` and the held stock returns to the catalog.
 - All PayPal orders are created against the PayPal sandbox; nothing reaches a live account.
+- Self-registration is **disabled on the demo**: there is no public sign-up. The staff account is
+  seeded by the server on every boot.
 
 ## End-to-end test script (under 5 minutes)
 
 1. **Browse the catalog.** Open the demo URL. The home page lists every seeded piece
-   with live gold-weight prices; the rate updates every few minutes.
+   with live gold-weight prices; the rate updates every few minutes. The home page
+   redirects to `/login`; the public customer side starts at `/reserve`.
 2. **Reserve via the public chat.** Open `/reserve` and ask the assistant for a piece by
    name. For example:
 
@@ -53,15 +56,15 @@ Sign in at `/login`, then open `/reservations` to see the table of recent bookin
    The agent should match the seeded "Link Bracelet 1 Baht" (stock 5) and propose it as a
    priced quote card. The customer accepts the quote and gives a name and an email in the
    chat (for example: "Yes please. John Smith. `john@example.com`"); the PayPal button then
-   appears below the chat. Do not compare or quote prices from outside AGIS — they track
-   the live Thai gold bar rate on every page load.
+   appears below the chat. Do not compare or quote prices from outside AGIS — they are
+   derived from the international spot gold price (XAU/USD) converted to THB on every load.
 3. **Pay the deposit as the sandbox buyer.** Tap the PayPal button, sign in with the
    sandbox credentials above, confirm the test payment, and return to `/reserve`. The chat
-   panel will switch through "confirming with PayPal" to a green **Deposit paid**.
+   panel will switch through "confirming with PayPal" to "Deposit paid".
 4. **Run the shop side.** In a second tab, sign in at `/login` with the staff credentials
    above. Open `/reservations`. The booking you just paid appears with a **PAID** badge.
-5. **Collect the order.** On that row, click **Collect**, choose **Cash**, then mark the
-   sale **paid**. The held stock is released and the reservation moves to **COLLECTED**.
+5. **Collect the order.** On that row, click **Collect**, choose **Cash**, then confirm the
+   sale. The held stock is released and the reservation moves to **COLLECTED**.
 
 ## Seeded catalog (for reference)
 

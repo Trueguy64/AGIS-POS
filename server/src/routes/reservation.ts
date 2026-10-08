@@ -31,7 +31,7 @@ router.get("/", authenticate, async (_req, res) => {
 });
 
 router.post("/:id/check", authenticate, async (req, res) => {
-  try { const r = await getReservations().captureReservation(String(req.params.id)); res.json({ id: r.id, status: r.status }); }
+  try { const r = await getReservations().checkPayment(String(req.params.id)); res.json({ id: r.id, status: r.status }); }
   catch (e) { sendReservationError(res, e); }
 });
 router.post("/:id/accept", authenticate, authorize("Manager"), async (req, res) => {

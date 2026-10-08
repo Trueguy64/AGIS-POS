@@ -21,7 +21,6 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
 export type Deps = { prisma: PrismaClient; paypal: PayPal; now: () => Date; getRate: () => Promise<{ thbPerGram: number; usdToThb: number }>; config: Config };
 export type QuoteCard = { quoteId: string; itemId: string; title: string; priceTHB: number; depositTHB: number; currency: string; depositAmount: string; expiresAt: string };
 
-const HOLDING = ["PENDING", "CAPTURING", "PAID", "REVIEW"];
 const addMin = (d: Date, m: number) => new Date(d.getTime() + m * 60_000);
 
 export function createReservations({ prisma, paypal, now, getRate, config }: Deps) {
@@ -180,5 +179,15 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
     return prisma.reservation.findMany({ orderBy: { createdAt: "desc" }, include: { item: true, quote: true }, take: 200 });
   }
 
-  return { quotePrice, activeQuote, createReservation, releaseExpired, captureReservation, acceptReview, cancelReview, list };
+  /** Staff "Check payment": never capture before the buyer approved. */
+  async function checkPayment(id: string) {
+    const r = await load(id);
+    if (!r) throw new ReservationError("NOT_FOUND", "Reservation not found");
+    if (r.status !== "PENDING" || !r.paypalOrderId) return captureReservation(id);
+    const o = await paypal.getOrder(r.paypalOrderId);
+    if (o.kind !== "ok" || (o.value.orderStatus !== "APPROVED" && o.value.orderStatus !== "COMPLETED")) return r;
+    return captureReservation(id);
+  }
+
+  return { quotePrice, activeQuote, createReservation, releaseExpired, captureReservation, checkPayment, acceptReview, cancelReview, list };
 }

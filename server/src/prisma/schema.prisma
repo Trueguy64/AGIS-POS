@@ -36,7 +36,7 @@ model Item {
   purity       Float // fraction of pure gold, e.g. 0.965
   laborFee     Int           @default(0) // THB per piece (making charge)
   updatedAt    DateTime      @updatedAt
-  held         Int           @default(0) // units reserved by PENDING/CAPTURING reservations
+  held         Int           @default(0) // units reserved by PENDING / CAPTURING / PAID / REVIEW reservations
   quotes       Quote[]
   reservations Reservation[]
 }

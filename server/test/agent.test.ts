@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { freshDb, startApp } from "./helpers";
 import { createModel, ModelUnavailable, type Block } from "../src/agent/model";
 import { createAgent } from "../src/agent/agent";
+import { trimToFirstUser } from "../src/routes/agent";
 
 const { prisma } = await freshDb();
 
@@ -82,4 +83,26 @@ test("HTTP contract: role tool / non-string content / too long / too many → 40
   assert.equal(down.status, 503);
   assert.match((await down.json()).message, /assistant is unavailable/i);
   assert.equal(await prisma.quote.count(), 0);
+});
+
+test("trimToFirstUser drops a leading assistant greeting; all-assistant → empty", () => {
+  assert.deepEqual(trimToFirstUser([
+    { role: "assistant", content: "Hi! How can I help?" },
+    { role: "assistant", content: "Boo." },
+    { role: "user", content: "quote I1" },
+    { role: "assistant", content: "ok" },
+  ]), [{ role: "user", content: "quote I1" }, { role: "assistant", content: "ok" }]);
+  assert.deepEqual(trimToFirstUser([{ role: "assistant", content: "x" }]), []);
+});
+
+test("HTTP chat: no user message at all → 400 Invalid chat request", async () => {
+  const app = await startApp();
+  after(() => app.close());
+  const r = await fetch(`${app.base}/api/agent/chat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ messages: [{ role: "assistant", content: "Hello?" }] }),
+  });
+  assert.equal(r.status, 400);
+  assert.match((await r.json()).message, /Invalid chat request/i);
 });

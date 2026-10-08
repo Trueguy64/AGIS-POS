@@ -4,7 +4,10 @@ import { authenticate } from "../middlewares/authenticate";
 
 const router = Router();
 
-router.post("/register", register);
+router.post("/register", (req, res) => {
+  if (process.env.NODE_ENV === "production") { res.status(403).json({ message: "Registration is disabled on the demo" }); return; }
+  return register(req, res);
+});
 router.post("/login", login);
 router.post("/logout", authenticate, logout); // ← authenticate added
 router.get("/me", authenticate, getMe);

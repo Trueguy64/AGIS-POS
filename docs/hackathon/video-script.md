@@ -34,9 +34,9 @@ Target: PayPal AI Hackathon judges. English. Public YouTube upload; link in the 
 **Action.** Click the PayPal button. The sandbox popup opens.
 
 **Voice over.**
-> They click the PayPal button. The sandbox popup opens. They sign in as the sandbox buyer, confirm the deposit, and return to the chat. The status line under the chat switches to: payment received, confirming with PayPal. A moment later it turns green: deposit paid, your piece is held for 48 hours, show your name at the counter.
+> They click the PayPal button. The sandbox popup opens. They sign in as the sandbox buyer, confirm the deposit, and return to the chat. The status line under the chat switches to: payment received, confirming with PayPal. A moment later it changes to: deposit paid, your piece is held for 48 hours, show your name at the counter.
 
-**On screen.** The PayPal popup, the sandbox sign-in, the confirmation, the chat status line switching through "Payment received, confirming with PayPal…" to the green "Deposit paid" line.
+**On screen.** The PayPal popup, the sandbox sign-in, the confirmation, the chat status line switching through "Payment received, confirming with PayPal…" to the "Deposit paid" line.
 
 ---
 
