@@ -11,6 +11,8 @@ test("toMinor/fromMinor use integer math", () => {
   assert.throws(() => toMinor("abc"));
   assert.equal(fromMinor(35000), "350.00");
   assert.equal(fromMinor(10), "0.10");
+  assert.throws(() => fromMinor(-5));
+  assert.throws(() => fromMinor(10.5));
 });
 
 type Call = { url: string; init: RequestInit };
@@ -56,4 +58,30 @@ test("5xx and timeouts are unknown", async () => {
   const slow = fakeFetch((c) => new Promise<Response>((_, rej) => c.init.signal?.addEventListener("abort", () => rej(new Error("aborted")))));
   const r = await createPayPal({ clientId: "c", secret: "s", fetch: slow.f, timeoutMs: 20 }).captureOrder("O1", "x");
   assert.equal(r.kind, "unknown");
+});
+
+test("createOrder 201 with empty id is unknown", async () => {
+  const { f } = fakeFetch(() => Response.json({}, { status: 201 }));
+  const r = await createPayPal({ clientId: "c", secret: "s", fetch: f }).createOrder(449300, "THB", "x");
+  assert.equal(r.kind, "unknown");
+});
+
+test("401 on API call refreshes token and retries once", async () => {
+  let apiCalls = 0;
+  const { f, calls } = fakeFetch(() => {
+    apiCalls++;
+    if (apiCalls === 1) return new Response("", { status: 401 });
+    return Response.json({ id: "O1", status: "CREATED" }, { status: 201 });
+  });
+  const r = await createPayPal({ clientId: "c", secret: "s", fetch: f }).createOrder(449300, "THB", "create-R1");
+  assert.deepEqual(r, { kind: "ok", value: { orderId: "O1" } });
+  const tokenCalls = calls.filter((c) => c.url.endsWith("/v1/oauth2/token"));
+  assert.equal(tokenCalls.length, 2);
+});
+
+test("createOrder validates minor synchronously", () => {
+  const { f } = fakeFetch(() => new Response("", { status: 201 }));
+  const pp = createPayPal({ clientId: "c", secret: "s", fetch: f });
+  assert.throws(() => pp.createOrder(-5, "THB", "x"));
+  assert.throws(() => pp.createOrder(10.5, "THB", "x"));
 });
