@@ -145,43 +145,39 @@ export async function updateItem(req: Request, res: Response) {
         }
 
         const { title, image, description, categoryId, stock, weight, purity, laborFee } = result.data;
-        const updates: Record<string, unknown> = {};
 
-        // Only forward fields the client actually sent. `?? undefined` would
-        // overwrite with null on omitted fields; we want PATCH semantics.
+        // Conditional stock write FIRST — before any side effect (image delete), so a refused
+        // update never deletes the current image file. A reservation claimed in between the read
+        // and the write would otherwise leave stock < held.
+        if (stock !== undefined) {
+            const won = await prisma.item.updateMany({ where: { id, held: { lte: stock } }, data: { stock } });
+            if (won.count === 0) {
+                const re = await prisma.item.findUnique({ where: { id }, select: { held: true } });
+                if (!re) { res.status(404).json({ message: "Item not found" }); return; }
+                res.status(409).json({ message: `${re.held} units are held by reservations` });
+                return;
+            }
+        }
+
+        const updates: Record<string, unknown> = {};
         if (title !== undefined) updates.title = title;
         if (image !== undefined) updates.image = image;
         if (description !== undefined) updates.description = description;
         if (categoryId !== undefined) updates.categoryId = categoryId;
-        if (stock !== undefined) updates.stock = stock;
         if (weight !== undefined) updates.weight = weight;
         if (purity !== undefined) updates.purity = purity;
         if (laborFee !== undefined) updates.laborFee = laborFee;
 
+        // Snapshot the old image filename, but don't delete the file yet — only after the row
+        // update below commits. That way a refused update never deletes the current image.
+        let oldImage: string | undefined;
         if (image !== undefined) {
             const existing = await prisma.item.findUnique({ where: { id } });
             if (!existing) {
                 res.status(404).json({ message: "Item not found" });
                 return;
             }
-            if (existing.image) {
-                await deleteLocalImage(existing.image).catch((err) => {
-                    console.error("Failed to delete old image:", err);
-                });
-            }
-            updates.image = image;
-        }
-
-        if (stock !== undefined) {
-            const existing = await prisma.item.findUnique({ where: { id }, select: { held: true } });
-            if (!existing) {
-                res.status(404).json({ message: "Item not found" });
-                return;
-            }
-            if (stock < existing.held) {
-                res.status(409).json({ message: `${existing.held} units are held by reservations` });
-                return;
-            }
+            oldImage = existing.image ?? undefined;
         }
 
         if (title) {
@@ -200,11 +196,21 @@ export async function updateItem(req: Request, res: Response) {
             }
         }
 
-        const updated = await prisma.item.update({
-            where: { id },
-            data: updates,
-            ...itemWithCategory,
-        });
+        // Apply remaining updates. Stock was already written conditionally above; the other
+        // fields don't depend on held, so a regular update is fine.
+        let updated;
+        if (Object.keys(updates).length > 0) {
+            updated = await prisma.item.update({ where: { id }, data: updates, ...itemWithCategory });
+        } else {
+            updated = await prisma.item.findUnique({ where: { id }, ...itemWithCategory });
+        }
+        if (!updated) { res.status(404).json({ message: "Item not found" }); return; }
+
+        if (oldImage) {
+            await deleteLocalImage(oldImage).catch((err) => {
+                console.error("Failed to delete old image:", err);
+            });
+        }
 
         res.json(updated);
     } catch {
@@ -215,6 +221,7 @@ export async function deleteItem(req: Request, res: Response) {
     try {
         const id = req.params.id as string;
 
+        // Early fast-path checks (the conditional delete below is the race backstop).
         const existing = await prisma.item.findUnique({ where: { id } });
         if (!existing) {
             res.status(404).json({ message: "Item not found" });
@@ -230,14 +237,26 @@ export async function deleteItem(req: Request, res: Response) {
             return;
         }
 
+        // Conditional delete: refuses if a reservation was claimed (held > 0) or created
+        // (history appeared) in between the checks above. 404 if the row was deleted entirely.
+        const won = await prisma.item.deleteMany({ where: { id, held: 0, reservations: { none: {} } } });
+        if (won.count === 0) {
+            const re = await prisma.item.findUnique({ where: { id } });
+            if (!re) { res.status(404).json({ message: "Item not found" }); return; }
+            res.status(409).json({ message: re.held > 0
+                ? `${re.held} units are held by reservations`
+                : "This piece has reservation history; set its stock to 0 instead of deleting" });
+            return;
+        }
+
+        // Only after the conditional delete succeeded: drop the local image file.
         if (existing.image) {
             await deleteLocalImage(existing.image).catch((err) => {
                 console.error("Failed to delete image:", err);
             });
         }
 
-        const deletedItem = await prisma.item.delete({ where: { id } });
-        res.status(200).json(deletedItem);
+        res.status(200).json(existing);
     } catch {
         res.status(500).json({ error: "Internal server error" });
     }
@@ -264,17 +283,22 @@ export async function adjustStock(req: Request, res: Response) {
             res.status(400).json({ message: "Insufficient stock" });
             return;
         }
+        // Fast path: obvious refusal before the conditional write.
         if (newStock < item.held) {
             res.status(409).json({ message: `${item.held} units are held by reservations` });
             return;
         }
 
-        const updatedItem = await prisma.item.update({
-            where: { id },
-            data: { stock: newStock },
-            ...itemWithCategory,
-        });
+        // Conditional write: refuses if a reservation claimed in between the read above and the write.
+        const won = await prisma.item.updateMany({ where: { id, held: { lte: newStock } }, data: { stock: newStock } });
+        if (won.count === 0) {
+            const re = await prisma.item.findUnique({ where: { id } });
+            if (!re) { res.status(404).json({ message: "Item not found" }); return; }
+            res.status(409).json({ message: `${re.held} units are held by reservations` });
+            return;
+        }
 
+        const updatedItem = await prisma.item.findUnique({ where: { id }, ...itemWithCategory });
         res.status(200).json(updatedItem);
     } catch {
         res.status(500).json({ error: "Internal server error" });

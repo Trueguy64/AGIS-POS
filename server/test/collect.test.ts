@@ -97,3 +97,17 @@ test("editor: stock below held, delete with hold, delete with history → 409; q
   assert.equal((await fetch(`${app.base}/api/item/delete/${other}`, { method: "DELETE", headers: { cookie } })).status, 200);
   assert.equal(await prisma.quote.count({ where: { itemId: other } }), 0);
 });
+
+test("editor updateItem: PATCH stock below held → 409, stock unchanged", async () => {
+  // itemId has stock=1, held=1; PATCH /api/item/update/:id with stock=0 (below held) must refuse
+  // and the row must be untouched.
+  const r = await fetch(`${app.base}/api/item/update/${itemId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({ stock: 0 }),
+  });
+  assert.equal(r.status, 409);
+  const it = await item();
+  assert.equal(it.stock, 1);
+  assert.equal(it.held, 1);
+});
