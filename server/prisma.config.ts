@@ -1,6 +1,7 @@
 import { defineConfig } from "prisma/config";
+import { loadEnv } from "./src/env";
 
-process.loadEnvFile();
+loadEnv();
 
 export default defineConfig({
   schema: "src/prisma/schema.prisma",

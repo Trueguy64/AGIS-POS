@@ -7,5 +7,6 @@
     "esModuleInterop": true,
     "ignoreDeprecations": "6.0",
     "types": ["node"]
-  }
+  },
+  "exclude": ["scripts", "node_modules", "dist"]
 }
