@@ -12,7 +12,9 @@ const STATUS_TEXT: Partial<Record<ReservationStatus, string>> = {
   PENDING: "The payment did not go through. You can try the PayPal button again.",
   CANCELLED: "This reservation expired. Ask for a fresh quote.",
   EXPIRED: "This reservation expired. Ask for a fresh quote.",
+  COLLECTED: "This reservation has been collected.",
 };
+const TIMEOUT_TEXT = "Still confirming with PayPal. The shop will see your payment; you can close this page.";
 
 export default function ReservePage() {
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: "Hello! I can find a gold piece, quote today's price and hold it for you with a 10% PayPal deposit. What are you looking for?" }]);
@@ -23,11 +25,15 @@ export default function ReservePage() {
   const [status, setStatus] = useState<ReservationStatus | null>(null);
   const [pay, setPay] = useState<{ paypalClientId: string; currency: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [attempted, setAttempted] = useState(false); // a capture has been tried at least once
+  const [attempted, setAttempted] = useState(false); // a capture response has come back PENDING (a real refusal)
+  const [timedOut, setTimedOut] = useState(false); // the 2-minute polling window ended while still CAPTURING
   const end = useRef<HTMLDivElement>(null);
+  const mounted = useRef(true);
+  const inFlight = useRef(false); // a polling loop is already running for this component
 
   useEffect(() => { getPayConfig().then(setPay).catch(() => setError("Payments are unavailable right now.")); }, []);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, quote, status]);
+  useEffect(() => () => { mounted.current = false; }, []);
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -47,15 +53,27 @@ export default function ReservePage() {
 
   // Poll the capture endpoint itself while CAPTURING: safe to repeat, and it can take over a stale claim (§4.3).
   const onApproved = useCallback(async () => {
-    if (!reservation) return;
-    setAttempted(true);
+    if (!reservation || inFlight.current) return;
+    inFlight.current = true;
+    setAttempted(false);
+    setTimedOut(false);
+    setStatus("CAPTURING"); // optimistic: hide PayPal button until we hear back
     const started = Date.now();
-    for (;;) {
-      const r = await capture(reservation.reservationId).catch(() => null);
-      if (r) setStatus(r.status);
-      if (r && r.status !== "CAPTURING") return;
-      if (Date.now() - started > 120_000) return;
-      await new Promise((ok) => setTimeout(ok, 5000));
+    try {
+      for (;;) {
+        const r = await capture(reservation.reservationId).catch(() => null);
+        if (!mounted.current) return;
+        if (r) {
+          setStatus(r.status);
+          if (r.status === "PENDING") setAttempted(true); // only a real PayPal refusal flags attempted
+          if (r.status !== "CAPTURING") return;
+        }
+        // a network error (r is null) keeps CAPTURING and we keep polling inside the 2-minute window
+        if (Date.now() - started > 120_000) { setTimedOut(true); return; }
+        await new Promise((ok) => setTimeout(ok, 5000));
+      }
+    } finally {
+      inFlight.current = false;
     }
   }, [reservation]);
   const onPayError = useCallback((m: string) => setError(m), []);
@@ -78,7 +96,9 @@ export default function ReservePage() {
         {reservation && pay && (status === "PENDING" || status === null) && (
           <PayPalButton clientId={pay.paypalClientId} currency={reservation.currency} orderId={reservation.paypalOrderId} onApproved={onApproved} onError={onPayError} />
         )}
-        {status && status !== "PENDING" && <p className="rounded-slip bg-brass-100 p-3 font-semibold" role="status">{STATUS_TEXT[status]}</p>}
+        {status === "CAPTURING" && timedOut
+          ? <p className="rounded-slip bg-brass-100 p-3 font-semibold" role="status">{TIMEOUT_TEXT}</p>
+          : status && status !== "PENDING" && <p className="rounded-slip bg-brass-100 p-3 font-semibold" role="status">{STATUS_TEXT[status]}</p>}
         {status === "PENDING" && attempted && <p className="text-ink-soft">{STATUS_TEXT.PENDING}</p>}
         {error && <p className="text-stamp" role="alert">{error}</p>}
         <div ref={end} />
