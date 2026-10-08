@@ -33,7 +33,7 @@ export default function ReservePage() {
 
   useEffect(() => { getPayConfig().then(setPay).catch(() => setError("Payments are unavailable right now.")); }, []);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, quote, status]);
-  useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   async function send(e: FormEvent) {
     e.preventDefault();
