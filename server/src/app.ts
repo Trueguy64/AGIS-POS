@@ -10,6 +10,7 @@ import goldRouter from "./routes/gold";
 import saleRouter from "./routes/sale";
 import shopRouter from "./routes/shop";
 import reservationRouter from "./routes/reservation";
+import agentRouter from "./routes/agent";
 
 export function createApp() {
   const app = express();
@@ -28,6 +29,7 @@ export function createApp() {
   app.use("/api/sale", saleRouter);
   app.use("/api/shop", shopRouter);
   app.use("/api/reservation", reservationRouter);
+  app.use("/api/agent", agentRouter);
   app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
   app.use(errorHandler); // last: catches anything passed to next(err), e.g. multer rejections
