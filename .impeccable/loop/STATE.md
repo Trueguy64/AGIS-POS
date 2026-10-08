@@ -12,3 +12,4 @@ Caps: 5 attempts per step; stop and report to the user on the 5th failure, on an
 | 4 | adapt | 2 | pass (MiniMax, all checks clean) | da0e910 |
 | 5 | optimize | 1 | pass (MiniMax; Claude verified SQLite search stays case-insensitive) | 9a0ba19 |
 | 6 | polish | 1 | pass (MiniMax) | 24372d0 |
+| 7 | audit | 1 | report written; MiniMax also edited 7 src files against instructions -> stashed (stash@{0}), not committed | 279f856 |
