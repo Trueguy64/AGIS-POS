@@ -1,30 +1,49 @@
-import DeleteIcon from "../../assets/Delete.svg";
-import type { Item } from '../../types/Item';
+import { Minus, Plus, Trash2 } from "lucide-react";
+import type { CartItem } from "../../types/types";
+import { useGoldRate } from "../../contexts/GoldRateContext";
+import { describeGold, itemPrice, MONEY_COL, thb } from "../../lib/gold";
+import { imageUrl } from "../../api/item";
+import { both, th } from "../../lib/i18n";
 
 type ItemProps = {
-    item: Item;
+    cartItem: CartItem;
     onDelete: (id: string) => void;
     onUpdateQuantity: (id: string, amount: number) => void;
-};
+}
 
-function PaymentItem({ item, onDelete, onUpdateQuantity }: ItemProps) {
+const stepButton = "flex h-11 w-11 items-center justify-center text-ink hover:bg-paper disabled:opacity-40 disabled:hover:bg-transparent";
+
+function PaymentItem({ cartItem, onDelete, onUpdateQuantity }: ItemProps) {
+    const { item, quantity } = cartItem;
+    const rate = useGoldRate();
+    const unit = rate ? itemPrice(item, rate.thbPerGram) : null;
+
     return (
-        <div className="flex flex-col md:flex-row rounded-xl w-full p-4 border-2 gap-4 border-gray-400 mt-2">
-            <div className="flex items-center justify-center bg-red-100 rounded-xl p-2">
-                <button onClick={() => onDelete(item.id)} className="p-2 rounded-lg hover:bg-red-100 transition-colors">
-                    <img src={DeleteIcon} alt="Delete" className="w-5 h-5" />
-                </button>
+        // Phone: thumb · text · trash on row one, stepper · total on row two. Counter: one row.
+        <li className="grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2 px-4 py-3 md:flex md:gap-4 md:px-5">
+            <img className="h-12 w-12 shrink-0 rounded-slip border border-brass-300 object-cover" src={imageUrl(item.image)} alt="" />
+
+            <div className="min-w-0 md:flex-1">
+                <p className="line-clamp-2 font-semibold leading-snug text-ink md:truncate">{item.title}</p>
+                <p className="flex flex-wrap gap-x-2 text-ink-soft">
+                    <span className="whitespace-nowrap">{describeGold(item)}</span>
+                    {unit !== null && <span className="whitespace-nowrap tabular-nums">{thb(unit)} {th("each")}</span>}
+                </p>
             </div>
-            <div className="flex flex-col">
-                <h3 className="font-bold text-lg">{item.weight}G</h3>
-                <p className="text-gray-500 text-sm">฿{item.price.toLocaleString()}/unit</p>
+
+            <button type="button" onClick={() => onDelete(item.id)} className="flex h-11 w-11 items-center justify-center rounded-slip text-ink-muted hover:bg-stamp-tint hover:text-stamp md:order-last" aria-label={`${both("remove")}: ${item.title}`}>
+                <Trash2 size={18} />
+            </button>
+
+            <div className="col-span-3 flex items-center justify-between md:contents">
+                <div className="flex items-center overflow-hidden rounded-slip border border-brass-300" role="group" aria-label={`${both("quantity")}: ${item.title}`}>
+                    <button type="button" onClick={() => onUpdateQuantity(item.id, -1)} disabled={quantity <= 1} className={stepButton} aria-label={both("oneFewer")}><Minus size={16} /></button>
+                    <span className="w-8 text-center text-money font-semibold tabular-nums" aria-live="polite">{quantity}</span>
+                    <button type="button" onClick={() => onUpdateQuantity(item.id, 1)} disabled={quantity >= item.stock} className={stepButton} aria-label={both("oneMore")}><Plus size={16} /></button>
+                </div>
+                <span className={`${MONEY_COL} text-money font-bold text-ink`}>{unit !== null ? thb(unit * quantity) : "—"}</span>
             </div>
-            <div className="flex flex-row items-center md:ml-auto justify-around gap-6 p-2 border-2 border-gray-400 rounded-xl">
-                <button onClick={() => onUpdateQuantity(item.id, -1)} className="w-8 h-8 font-bold cursor-pointer">-</button>
-                <span className="font-bold w-4 text-center">{item.quantity}</span>
-                <button onClick={() => onUpdateQuantity(item.id, 1)} className="w-8 h-8 font-bold cursor-pointer">+</button>
-            </div>
-        </div>
+        </li>
     );
 }
 

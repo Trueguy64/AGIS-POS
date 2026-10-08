@@ -1,56 +1,55 @@
-import { useState } from 'react';
-import PaymentItem from "./PaymentItem";
-import TaskForm from "./AddItem";
-import type { Item } from '../../types/Item';
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import PaymentItem from "./PaymentItem"
+import type { CartItem } from '../../types/types'
+import Bi from "../Bi";
+import { both, th } from "../../lib/i18n";
 
 type ShoppingBagProps = {
-    items: Item[];
-    goldPrice : number | null;
-    onAdd: (item: Omit<Item, 'id'>) => void;
+    cartItem: CartItem[];
     onDelete: (id: string) => void;
     onUpdateQuantity: (id: string, amount: number) => void;
-};
-
-function ShoppingBag({ items, goldPrice, onAdd, onDelete, onUpdateQuantity }: ShoppingBagProps) {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-
-    return (
-        <div className="bg-white w-full h-full flex-2 p-4 border-4 border-gray-300 rounded-3xl">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl md:text-5xl font-black uppercase text-gray-900">Your Shopping Bag</h1>
-                <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="w-12 h-12 text-3xl bg-green-100 text-green-700 rounded-xl font-black hover:bg-green-200 transition-all"
-                >
-                    +
-                </button>
-            </div>
-
-            <div className="overflow-y-auto flex-1 space-y-4">
-                {items.length === 0 ? (
-                    <div className="flex justify-center items-center">
-                        <p className="text-center text-gray-400">Your bag is empty.</p>
-                    </div>
-                ) : (
-                    items.map((item) => (
-                        <PaymentItem 
-                            key={item.id} 
-                            item={item} 
-                            onDelete={onDelete} 
-                            onUpdateQuantity={onUpdateQuantity}
-                        />
-                    ))
-                )}
-            </div>
-
-            <TaskForm 
-                isOpen={isModalOpen}
-                goldPrice={goldPrice} 
-                onClose={() => setIsModalOpen(false)} 
-                onAdd={(item) => { onAdd(item); setIsModalOpen(false); }} 
-            />
-        </div>
-    );
 }
 
-export default ShoppingBag;
+function ShoppingBag({ cartItem, onDelete, onUpdateQuantity }: ShoppingBagProps) {
+    const navigate = useNavigate();
+    const pieces = cartItem.reduce((n, c) => n + c.quantity, 0);
+
+    return (
+        <section className="flex min-h-0 w-full flex-[2] flex-col overflow-hidden rounded-slip border border-brass-300 bg-slip" aria-labelledby="bag-title">
+            <header className="flex items-center gap-3 px-5 py-4">
+                <button
+                    type="button"
+                    onClick={() => navigate('/')}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-slip border border-brass-300 text-ink hover:bg-paper"
+                    aria-label={both("backToCatalog")}
+                >
+                    <ArrowLeft size={20} />
+                </button>
+                <h1 id="bag-title" className="whitespace-nowrap text-display font-bold text-ink"><Bi k="bag" stack /></h1>
+                <span className="ml-auto whitespace-nowrap text-ink-muted tabular-nums">{pieces} {th("pieces")}</span>
+            </header>
+
+            <div className="flex-1 overflow-y-auto">
+                {cartItem.length === 0 ? (
+                    <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+                        <p className="text-display font-bold text-ink"><Bi k="bagEmpty" stack className="items-center" /></p>
+                        <p className="mt-2 text-ink-soft"><Bi k="bagEmptyHint" /></p>
+                    </div>
+                ) : (
+                    <ul className="py-1">
+                        {cartItem.map((cartItem) => (
+                            <PaymentItem
+                                key={cartItem.item.id}
+                                cartItem={cartItem}
+                                onDelete={onDelete}
+                                onUpdateQuantity={onUpdateQuantity}
+                            />
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </section>
+    )
+}
+export default ShoppingBag

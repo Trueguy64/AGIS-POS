@@ -1,0 +1,121 @@
+import { Router } from "express";
+import { z } from "zod";
+import { Prisma } from "../generated/prisma/client";
+import { prisma } from "../db";
+import { authenticate } from "../middlewares/authenticate";
+
+const saleSchema = z.object({
+  payment: z.enum(["Cash", "PromptPay"]),
+  amountPaid: z.number().int().nonnegative(),
+  goldRate: z.number().positive(),
+  lockedAt: z.string().datetime(),
+  promoCodes: z.array(z.string().trim().toUpperCase()).default([]),
+  lines: z.array(z.object({ itemId: z.string(), quantity: z.number().int().positive() })).min(1),
+});
+
+/** Idempotency-Key validation: non-empty, trimmed, reasonable length so a mistyped huge value
+ *  can't blow up an index lookup. A failed validation just falls through and creates normally. */
+const idempotencyKey = (headerValue: string | undefined) => {
+  if (typeof headerValue !== "string") return null;
+  const trimmed = headerValue.trim();
+  return trimmed.length > 0 && trimmed.length <= 200 ? trimmed : null;
+};
+
+/** Same arithmetic as the client (src/lib/gold.ts): whole-baht unit price. */
+const unitPrice = (weight: number, purity: number, laborFee: number, thbPerGram: number) =>
+  Math.round(weight * purity * thbPerGram + laborFee);
+
+const router = Router();
+
+// POST /api/sale — record a sale and decrement stock atomically. The server recomputes every amount
+// from the locked rate and the current catalog; the client's totals are never trusted.
+// If the request carries an `Idempotency-Key` header that matches an existing sale, the existing
+// sale is returned (same status code and body) so a retried submit does not double-charge the customer.
+router.post("/", authenticate, async (req, res) => {
+  const parsed = saleSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Validation error", error: parsed.error.issues });
+    return;
+  }
+  const { payment, amountPaid, goldRate, lockedAt, promoCodes, lines } = parsed.data;
+  const key = idempotencyKey(req.header("Idempotency-Key"));
+
+  // Cheapest path first: did a previous request with this key already commit?
+  if (key) {
+    const existing = await prisma.sale.findUnique({ where: { saleKey: key }, include: { lines: true } });
+    if (existing) {
+      res.status(201).json(existing);
+      return;
+    }
+  }
+
+  try {
+    const sale = await prisma.$transaction(async (tx) => {
+      const items = await tx.item.findMany({ where: { id: { in: lines.map((l) => l.itemId) } } });
+      const byId = new Map(items.map((i) => [i.id, i]));
+
+      const saleLines = lines.map((l) => {
+        const item = byId.get(l.itemId);
+        if (!item) throw Object.assign(new Error(`Item ${l.itemId} no longer exists`), { status: 409 });
+        if (item.stock < l.quantity) throw Object.assign(new Error(`Only ${item.stock} of "${item.title}" left in stock`), { status: 409 });
+        return {
+          itemId: item.id, title: item.title, weight: item.weight, purity: item.purity, laborFee: item.laborFee,
+          unitPrice: unitPrice(item.weight, item.purity, item.laborFee, goldRate), quantity: l.quantity,
+        };
+      });
+
+      const subtotal = saleLines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+      const promos = promoCodes.length ? await tx.promo.findMany({ where: { code: { in: promoCodes } } }) : [];
+      const discount = Math.min(subtotal, Math.round(promos.reduce((s, p) =>
+        s + (p.type === "PERCENT" ? subtotal * (p.discountAmount / 100) : p.discountAmount), 0)));
+      const total = subtotal - discount;
+      if (amountPaid < total) throw Object.assign(new Error("Amount paid is less than the total"), { status: 400 });
+
+      for (const l of saleLines) {
+        await tx.item.update({ where: { id: l.itemId }, data: { stock: { decrement: l.quantity } } });
+      }
+
+      const cashier = await tx.user.findUnique({ where: { id: req.user!.id } });
+
+      // saleKey is the optional unique column; absent retries still get a row.
+      return tx.sale.create({
+        data: {
+          cashierId: req.user!.id,
+          cashierName: cashier?.name ?? req.user!.email,
+          payment, amountPaid, change: amountPaid - total, goldRate, lockedAt: new Date(lockedAt),
+          subtotal, discount, total, promoCodes: promos.map((p) => p.code).join(","),
+          saleKey: key,
+          lines: { create: saleLines },
+        },
+        include: { lines: true },
+      });
+    });
+    res.status(201).json(sale);
+  } catch (err) {
+    // Race: two identical requests arrived between our pre-check and the create; the unique
+    // constraint on saleKey rejects the loser and we re-read the winner.
+    if (key && err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const existing = await prisma.sale.findUnique({ where: { saleKey: key }, include: { lines: true } });
+      if (existing) {
+        res.status(201).json(existing);
+        return;
+      }
+    }
+    const status = (err as { status?: number }).status ?? 500;
+    if (status === 500) console.error("[sale]", err);
+    res.status(status).json({ message: status === 500 ? "Internal server error" : (err as Error).message });
+  }
+});
+
+// GET /api/sale/:id — the saved sale, for the thank-you screen and the printed slip.
+router.get("/:id", authenticate, async (req, res) => {
+  const id = Number(req.params.id);
+  const sale = Number.isInteger(id) ? await prisma.sale.findUnique({ where: { id }, include: { lines: true } }) : null;
+  if (!sale) {
+    res.status(404).json({ message: "Sale not found" });
+    return;
+  }
+  res.json(sale);
+});
+
+export default router;

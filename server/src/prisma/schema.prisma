@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum PromoType {
+  PERCENT
+  VALUE
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String   @default("Temporary Name")
+  email     String   @unique
+  phone     String   @default("000-000-0000")
+  password  String
+  role      String   @default("Employee")
+  createdAt DateTime @default(now())
+}
+
+// A gold piece. Price is NOT stored: it is weight * purity * live gold rate + laborFee,
+// computed on the client and locked onto the receipt at checkout.
+model Item {
+  id          String    @id @default(cuid(2))
+  title       String
+  image       String
+  description String?
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  stock       Int       @default(0)
+  weight      Float // grams
+  purity      Float // fraction of pure gold, e.g. 0.965
+  laborFee    Int       @default(0) // THB per piece (making charge)
+  updatedAt   DateTime  @updatedAt
+}
+
+model Promo {
+  id             String    @id @default(cuid(2))
+  code           String    @unique
+  discountAmount Int
+  type           PromoType
+  createdAt      DateTime  @default(now())
+}
+
+model Category {
+  id     String @id @default(cuid(2))
+  name   String @unique
+  symbol String
+  items  Item[]
+}
+
+// A completed sale. The id doubles as the receipt number. Lines are frozen copies of the piece
+// at the moment of sale, so later catalog edits never rewrite a printed slip.
+// saleKey carries the client-supplied UUID (Idempotency-Key) so a retried POST that already
+// committed returns the existing row instead of double-recording the sale. Nullable + unique
+// leaves legacy rows alone (multiple nulls are allowed in a SQLite UNIQUE column).
+model Sale {
+  id          Int        @id @default(autoincrement())
+  createdAt   DateTime   @default(now())
+  cashierId   Int
+  cashierName String
+  payment     String     // "Cash" | "PromptPay"
+  amountPaid  Int
+  change      Int
+  goldRate    Float      // THB per gram of pure gold, as locked
+  lockedAt    DateTime
+  subtotal    Int
+  discount    Int
+  total       Int
+  promoCodes  String     @default("")
+  saleKey     String?    @unique
+  lines       SaleLine[]
+}
+
+model SaleLine {
+  id        Int     @id @default(autoincrement())
+  saleId    Int
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  itemId    String?
+  title     String
+  weight    Float
+  purity    Float
+  laborFee  Int
+  unitPrice Int
+  quantity  Int
+}

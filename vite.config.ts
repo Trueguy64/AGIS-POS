@@ -1,17 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from "@tailwindcss/vite";
+import tailwindcss from '@tailwindcss/vite'
+import svgr from 'vite-plugin-svgr'
 
-// https://vite.dev/config/
+const api = { target: 'http://localhost:3000', changeOrigin: true }
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), svgr()],
   server: {
-    proxy: {
-      '/api-swissquote': {
-        target: 'https://forex-data-feed.swissquote.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-swissquote/, '')
-      }
-    }
-  }
-});
+    allowedHosts: ['cathi-priviest-dastardly.ngrok-free.dev'],
+    proxy: { '/api': api, '/uploads': api },
+  },
+})

@@ -1,0 +1,6 @@
+node_modules
+dev.db*
+.env
+uploads/*
+!uploads/placeholder.png
+src/generated

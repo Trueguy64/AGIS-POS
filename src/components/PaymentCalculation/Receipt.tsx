@@ -1,42 +1,116 @@
-type Receipt = {
-  totalPrice: number;
-  totalWeight: number;
-};
+import type { CartItem, GoldRate, Promo } from "../../types/types"
+import type { PromoEnterData } from "../../schemas/promoSchemas";
+import PromosInput from "./PromosInput";
+import PromoCard from "./PromoCard";
+import { LockedRateStamp, RateStamp } from "../RateStamp";
+import { itemPrice, MONEY_COL, ratePerBaht, thb } from "../../lib/gold";
+import Bi from "../Bi";
+import { S, th } from "../../lib/i18n";
 
-function Receipt({ totalPrice, totalWeight }: Receipt){
+type ReceiptProps = {
+    lines: CartItem[];
+    promos: Promo[];
+    onAddPromo?: (data: PromoEnterData) => Promise<void>;
+    onDeletePromo?: (id: string) => void;
+    onLock?: () => void;
+    subtotal: number;
+    discount: number;
+    total: number;
+    goldRate: number | null;    // THB per gram this receipt is priced at (live or locked)
+    liveRate?: GoldRate | null; // while the sale is still being built: the live stamp
+    lockedAt?: string;          // once Lock was pressed: the same stamp, struck
+    interactable: boolean;
+}
+
+/**
+ * The weigh slip. Lines, then discounts, then one rule, then Subtotal / Discount / Total.
+ * The header's right slot holds the live stamp until Lock is pressed, then the struck one in the same place.
+ */
+function Receipt({ lines, promos, onAddPromo, onDeletePromo, onLock, subtotal, discount, total, goldRate, liveRate, lockedAt, interactable }: ReceiptProps) {
+    const locked = Boolean(lockedAt && goldRate !== null);
     return (
-        <div className="flex flex-col flex-1 w-full h-full">
-            <div className="flex flex-col h-full border-b-0 bg-white p-4 border-4 border-gray-300 rounded-3xl overflow-y-auto">
-                <h1 className="text-3xl md:text-5xl font-black uppercase break-words text-gray-900">Receipt</h1>
-                <br />
-                <hr className="bg-gray-900 h-0.5 mb-6" />
-                <div className="flex flex-col">
-                    <div className="flex flex-col md:flex-row md:justify-between md:items-center">
-                        <p className="text-xl lg:text-2xl">Subtotal</p>
-                        <p className="text-xl lg:text-2xl font-bold">฿0.00</p>
-                    </div>
-                    <div className="flex flex-col md:flex-row md:justify-between md:items-center text-red-400">
-                        <p className="text-xl lg:text-2xl">Weight</p>
-                        <p className="text-xl lg:text-2xl font-bold">{totalWeight.toLocaleString()} G</p>
-                    </div>
-                </div>
-                <div>
+        <section className="flex min-h-0 w-full flex-1 flex-col" aria-labelledby="receipt-title">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-slip border border-b-0 border-brass-300 bg-slip p-5">
+                <header className="flex flex-wrap items-start justify-between gap-3">
+                    <h2 id="receipt-title" className="shrink-0 whitespace-nowrap text-display font-bold text-ink"><Bi k="receipt" stack /></h2>
+                    {locked
+                        ? <LockedRateStamp thbPerGram={goldRate!} lockedAt={lockedAt!} struck />
+                        : <RateStamp rate={liveRate ?? null} compact />}
+                </header>
 
-                </div>
-                <div className="mt-auto pt-6 flex flex-col mb-6">
-                    <h1 className="text-3xl lg:text-5xl">Total:</h1>
-                    <h1 className="text-3xl lg:text-5xl font-bold">฿{totalPrice.toLocaleString()}</h1>
-                </div>
+                {lines.length > 0 && goldRate !== null && (
+                    <ul className="mt-5 flex flex-col gap-2">
+                        {lines.map(({ item, quantity }) => (
+                            <li key={item.id} className="flex items-baseline justify-between gap-3">
+                                <span className="min-w-0 truncate">
+                                    <span className="font-semibold text-ink">{item.title}</span>
+                                    {quantity > 1 && <span className="text-ink-soft tabular-nums"> × {quantity}</span>}
+                                </span>
+                                <span className={`${MONEY_COL} tabular-nums`}>{thb(itemPrice(item, goldRate) * quantity)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+
+                {interactable && !locked && (
+                    <div className="mt-4">
+                        <PromosInput onSubmit={onAddPromo} />
+                        {promos.length > 0 && (
+                            <ul className="mt-3 flex flex-col gap-2">
+                                {promos.map((promo) => (
+                                    <PromoCard key={promo.id} promo={promo} onDelete={(id) => onDeletePromo?.(id)} />
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                )}
+
+                <dl className="mt-auto flex flex-col gap-2 border-t border-brass-300 pt-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                        <dt className="text-ink-soft"><Bi k="subtotal" /></dt>
+                        <dd className={`${MONEY_COL} font-semibold`}>{thb(subtotal)}</dd>
+                    </div>
+                    {discount > 0 && (
+                        <div className="flex items-baseline justify-between gap-3 text-stamp">
+                            <dt><span lang="th">{th("discount")}</span> <span lang="en" className="opacity-80">{S.discount[1]}</span>{promos.length > 0 && <span className="text-compact"> · {promos.map(p => p.code).join(", ")}</span>}</dt>
+                            <dd className={`${MONEY_COL} font-semibold`}>−{thb(discount)}</dd>
+                        </div>
+                    )}
+                    <div className="flex items-end justify-between gap-3 pt-2">
+                        <dt className="text-display font-bold text-ink"><Bi k="total" stack /></dt>
+                        <dd className="text-display font-bold text-brass-800 tabular-nums">{thb(total)}</dd>
+                    </div>
+                </dl>
             </div>
-            <hr className="h-0.5 border-t-4 border-dashed border-gray-300 " />
-            <div className="bg-white p-4 border-4 border-t-0 border-gray-300 rounded-3xl">
-                <div className="flex flex-col-reverse md:flex-row justify-between gap-3">
-                    <button className="text-lg lg:text-2xl p-2 rounded-xl border-2 border-gray-300 text-gray-800 font-bold cursor-pointer">Back</button>
-                    <button className="text-lg lg:text-2xl bg-blue-400 rounded-xl p-2 text-white font-bold cursor-pointer">Continue</button>
-                </div>
+
+            {/* The slip's perforation */}
+            <div className="border-t border-dashed border-brass-500" aria-hidden />
+
+            {/* Phones: the footer stays in thumb reach while the receipt is on screen. */}
+            <div className={`rounded-b-slip border border-t-0 border-brass-300 bg-slip p-4 ${interactable ? "sticky bottom-0 md:static" : "py-3"}`}>
+                {interactable ? (
+                    <button
+                        type="button"
+                        className="flex h-14 w-full items-center justify-center gap-3 rounded-slip bg-brass-700 px-4 text-slip hover:bg-brass-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={onLock}
+                        disabled={!goldRate || total <= 0 || locked}
+                        aria-busy={locked}
+                    >
+                        {goldRate ? (
+                            <span className="flex flex-col items-center leading-tight">
+                                <span className="text-money font-bold" lang="th">{th("lockAndContinue")} <span className="tabular-nums">{thb(ratePerBaht(goldRate))}{th("perBaht")}</span></span>
+                                <span lang="en" className="text-compact opacity-80">{S.lockAndContinue[1]}</span>
+                            </span>
+                        ) : (
+                            <Bi k="waitingForRate" stack className="items-center text-money font-bold" />
+                        )}
+                    </button>
+                ) : (
+                    <p className="text-center text-ink-muted"><Bi k="lockedForSale" /></p>
+                )}
             </div>
-        </div>
+        </section>
     )
 }
-export default Receipt
 
+export default Receipt;
