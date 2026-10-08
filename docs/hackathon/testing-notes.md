@@ -52,7 +52,7 @@ Sign in at `/login`, then open `/reservations` to see the table of recent bookin
 
    The agent should match the seeded "Link Bracelet 1 Baht" (stock 5) and propose it as a
    priced quote card. The customer accepts the quote and gives a name and an email in the
-   chat (for example: "Yes please. John Smith. [email protected]"); the PayPal button then
+   chat (for example: "Yes please. John Smith. `john@example.com`"); the PayPal button then
    appears below the chat. Do not compare or quote prices from outside AGIS — they track
    the live Thai gold bar rate on every page load.
 3. **Pay the deposit as the sandbox buyer.** Tap the PayPal button, sign in with the

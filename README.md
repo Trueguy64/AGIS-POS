@@ -1,13 +1,13 @@
 # AGIS — Agentic Gold POS
 
-**AGIS is a point-of-sale for Thai gold shops, with an in-chat PayPal reservation flow for buyers who are not in the shop.** A tourist, expat or online buyer opens `/reserve`, chats in English with a tool-calling AI agent, gets a live-rate quote for a real piece from the catalog, and pays a 10% PayPal deposit that holds the piece and the quoted price for 48 hours. Staff see the paid booking at `/reservations` and collect the balance at the counter through the existing Cash / PromptPay checkout. Adapted from [CSC105-G01-ONE-POS](https://github.com/Trueguy64/CSC105-G01-ONE-POS) and submitted to the [PayPal AI Hackathon](https://devpost.com) (deadline 2026-11-12 12:00 PT).
+**AGIS is a point-of-sale for Thai gold shops, with an in-chat PayPal reservation flow for buyers who are not in the shop.** A tourist, expat or online buyer opens `/reserve`, chats in English with a tool-calling AI agent, gets a live-rate quote for a real piece from the catalog, and pays a 10% PayPal deposit that holds the piece and the quoted price for 48 hours. Staff see the paid booking at `/reservations` and collect the balance at the counter through the existing Cash / PromptPay checkout. Adapted from [CSC105-G01-ONE-POS](https://github.com/Trueguy64/CSC105-G01-ONE-POS) and submitted to the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (deadline 2026-11-12 12:00 PT).
 
 **Live demo, judge logins, and troubleshooting:** see [`docs/hackathon/testing-notes.md`](docs/hackathon/testing-notes.md).
 **Demo video:** `<YouTube link after upload>` (under 3 minutes; see [`docs/hackathon/video-script.md`](docs/hackathon/video-script.md) for the script).
 
 ## What changed since Oct 6, 2026
 
-The redesign-loop branch holds **36 commits** between the Oct 6 base and `a976c50`, grouped by phase. All dates are 2026-10-08 unless noted.
+The redesign-loop branch holds **36 commits** between the Oct 6 base — `fb855f1 Added a lot of stuff`, the last commit on the pre-hackathon `main` — and `a976c50`, the most recent redesign-loop commit before this README. They are grouped by phase. All dates are 2026-10-08 unless noted.
 
 ### Redesign loop on the existing POS (the four cycles + a re-audit)
 
@@ -94,6 +94,8 @@ The full design (data model, state machine, edge cases) is in
 - `getOrder(orderId)` — read-only, used to settle a stale claim and to distinguish "already captured" from "order not approved" from "network error".
 - Amount strings (`"350.00"`) are parsed to minor units with integer math (`toMinor` / `fromMinor`); a money path never goes through a float.
 - A definite refusal (4xx with a PayPal error body, e.g. `ORDER_NOT_APPROVED`) is treated differently from an unknown outcome (timeout, network error, 5xx, 404). The state machine maps them differently: a refusal backs the reservation to `PENDING` so the customer can try again, an unknown leaves `CAPTURING` so the staff "Check payment" button can resolve it.
+
+The hosted demo uses a US PayPal sandbox merchant account (the Thai sandbox merchant account returned `COMPLIANCE_VIOLATION` at approval); a real deployment would use the shop's own PayPal business account, subject to PayPal's availability in Thailand.
 
 **AI.** The agent at `POST /agent/chat` runs a tool-calling loop on `minimax-m3` (configurable through `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`). It has three tools, none of which accept amounts or stock counts from the model — every value the model can quote comes from the server:
 
