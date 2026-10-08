@@ -25,17 +25,20 @@ model User {
 // A gold piece. Price is NOT stored: it is weight * purity * live gold rate + laborFee,
 // computed on the client and locked onto the receipt at checkout.
 model Item {
-  id          String    @id @default(cuid(2))
-  title       String
-  image       String
-  description String?
-  categoryId  String?
-  category    Category? @relation(fields: [categoryId], references: [id])
-  stock       Int       @default(0)
-  weight      Float // grams
-  purity      Float // fraction of pure gold, e.g. 0.965
-  laborFee    Int       @default(0) // THB per piece (making charge)
-  updatedAt   DateTime  @updatedAt
+  id           String        @id @default(cuid(2))
+  title        String
+  image        String
+  description  String?
+  categoryId   String?
+  category     Category?     @relation(fields: [categoryId], references: [id])
+  stock        Int           @default(0)
+  held         Int           @default(0) // units reserved by PENDING/CAPTURING reservations
+  weight       Float // grams
+  purity       Float // fraction of pure gold, e.g. 0.965
+  laborFee     Int           @default(0) // THB per piece (making charge)
+  updatedAt    DateTime      @updatedAt
+  quotes       Quote[]
+  reservations Reservation[]
 }
 
 model Promo {
@@ -73,6 +76,7 @@ model Sale {
   total       Int
   promoCodes  String     @default("")
   saleKey     String?    @unique
+  depositPaid Int        @default(0) // THB already paid via PayPal (collections)
   lines       SaleLine[]
 }
 
@@ -87,4 +91,38 @@ model SaleLine {
   laborFee  Int
   unitPrice Int
   quantity  Int
+}
+
+model Quote {
+  id            String       @id @default(cuid(2))
+  itemId        String
+  item          Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  goldRate      Float
+  priceSatang   Int
+  depositSatang Int
+  currency      String
+  depositMinor  Int
+  expiresAt     DateTime
+  createdAt     DateTime     @default(now())
+  reservation   Reservation?
+}
+
+model Reservation {
+  id            String    @id @default(cuid(2))
+  quoteId       String    @unique
+  quote         Quote     @relation(fields: [quoteId], references: [id])
+  itemId        String
+  item          Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  customerName  String
+  contact       String
+  clientIp      String?
+  status        String    // PENDING | CAPTURING | PAID | REVIEW | COLLECTED | EXPIRED | CANCELLED
+  paypalOrderId String?   @unique
+  captureStatus String?
+  capturedMinor Int?
+  claimedAt     DateTime? // set from injected now() when CAPTURING is claimed; staleness is measured on this
+  heldUntil     DateTime
+  saleId        Int?      @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }

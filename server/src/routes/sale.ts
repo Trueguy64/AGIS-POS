@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../db";
 import { authenticate } from "../middlewares/authenticate";
+import { unitPrice } from "../lib/pricing";
 
 const saleSchema = z.object({
   payment: z.enum(["Cash", "PromptPay"]),
@@ -20,10 +21,6 @@ const idempotencyKey = (headerValue: string | undefined) => {
   const trimmed = headerValue.trim();
   return trimmed.length > 0 && trimmed.length <= 200 ? trimmed : null;
 };
-
-/** Same arithmetic as the client (src/lib/gold.ts): whole-baht unit price. */
-const unitPrice = (weight: number, purity: number, laborFee: number, thbPerGram: number) =>
-  Math.round(weight * purity * thbPerGram + laborFee);
 
 const router = Router();
 
