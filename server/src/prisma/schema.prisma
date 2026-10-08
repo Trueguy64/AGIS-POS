@@ -32,11 +32,11 @@ model Item {
   categoryId   String?
   category     Category?     @relation(fields: [categoryId], references: [id])
   stock        Int           @default(0)
-  held         Int           @default(0) // units reserved by PENDING/CAPTURING reservations
   weight       Float // grams
   purity       Float // fraction of pure gold, e.g. 0.965
   laborFee     Int           @default(0) // THB per piece (making charge)
   updatedAt    DateTime      @updatedAt
+  held         Int           @default(0) // units reserved by PENDING/CAPTURING reservations
   quotes       Quote[]
   reservations Reservation[]
 }
