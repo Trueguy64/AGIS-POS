@@ -6,7 +6,7 @@ import PromoCard from "./PromoCard";
 import { LockedRateStamp, RateStamp } from "../RateStamp";
 import { itemPrice, MONEY_COL, ratePerBaht, thb } from "../../lib/gold";
 import Bi from "../Bi";
-import { S, th } from "../../lib/i18n";
+import { en, th } from "../../lib/i18n";
 
 type ReceiptProps = {
     lines: CartItem[];
@@ -88,7 +88,7 @@ function Receipt({ lines, promos, onAddPromo, onDeletePromo, onLock, subtotal, d
                     </div>
                     {discount > 0 && (
                         <div className="flex items-baseline justify-between gap-3 text-stamp">
-                            <dt><span lang="th">{th("discount")}</span> <span lang="en" className="opacity-80">{S.discount[1]}</span>{promos.length > 0 && <span className="text-compact"> · {promos.map(p => p.code).join(", ")}</span>}</dt>
+                            <dt><span lang="th">{th("discount")}</span> <span lang="en" className="opacity-80">{en("discount")}</span>{promos.length > 0 && <span className="text-compact"> · {promos.map(p => p.code).join(", ")}</span>}</dt>
                             <dd className={`${MONEY_COL} font-semibold`}>−{thb(discount)}</dd>
                         </div>
                     )}
@@ -118,7 +118,7 @@ function Receipt({ lines, promos, onAddPromo, onDeletePromo, onLock, subtotal, d
                         {goldRate ? (
                             <span className="flex flex-col items-center leading-tight">
                                 <span className="text-money font-bold" lang="th">{th("lockAndContinue")} <span className="tabular-nums">{thb(ratePerBaht(goldRate))}{th("perBaht")}</span></span>
-                                <span lang="en" className="text-compact opacity-80">{S.lockAndContinue[1]}</span>
+                                <span lang="en" className="text-compact opacity-80">{en("lockAndContinue")}</span>
                             </span>
                         ) : (
                             <Bi k="waitingForRate" stack className="items-center text-money font-bold" />

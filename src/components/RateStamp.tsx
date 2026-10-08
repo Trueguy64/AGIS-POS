@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { GoldRate } from "../types/types";
 import { formatDateTime, formatTime, ratePerBaht, thb, thbPerGramText } from "../lib/gold";
 import { useGoldRateStatus } from "../contexts/GoldRateContext";
-import { S, both, th } from "../lib/i18n";
+import { both, en, th } from "../lib/i18n";
 
 /** Renders text so that only the characters that changed since the last render roll in. */
 function RollingText({ text }: { text: string }) {
@@ -35,7 +35,7 @@ export function RateStamp({ rate, compact = false }: LiveProps) {
         <div className="flex h-12 items-center gap-3 rounded-slip border-[3px] border-dashed border-stamp bg-slip px-3 text-stamp" role="alert">
           <span lang="th" className="font-semibold">{th("rateUnavailable")}</span>
           <button type="button" onClick={retry} className="h-8 rounded-slip bg-stamp px-3 font-bold text-slip hover:opacity-90">
-            {th("retry")} <span lang="en" className="font-normal">{S.retry[1]}</span>
+            {th("retry")} <span lang="en" className="font-normal">{en("retry")}</span>
           </button>
         </div>
       );
@@ -92,11 +92,11 @@ function LivePopover({ rate, compact }: LoadedProps) {
       </summary>
 
       <div className="absolute right-0 z-40 mt-2 w-80 rounded-slip border border-brass-300 bg-slip p-4 text-ink shadow-none">
-        <p className="font-semibold">{th("rateDetails")} <span lang="en" className="font-normal text-ink-muted">{S.rateDetails[1]}</span></p>
+        <p className="font-semibold">{th("rateDetails")} <span lang="en" className="font-normal text-ink-muted">{en("rateDetails")}</span></p>
         <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
-          <dt lang="th" className="text-ink-soft">{th("ornament")} <span lang="en" className="text-ink-muted">{S.ornament[1]}</span></dt><dd className="text-right font-semibold tabular-nums">{thb(perBaht)} {th("perBaht")}</dd>
-          <dt lang="th" className="text-ink-soft">{th("bar")} <span lang="en" className="text-ink-muted">{S.bar[1]}</span></dt><dd className="text-right font-semibold tabular-nums">{thb(ratePerBaht(rate.thbPerGram, "bar"))} {th("perBaht")}</dd>
-          <dt lang="th" className="text-ink-soft">{S.perGram[1]}</dt><dd className="text-right font-semibold tabular-nums">{thbPerGramText(rate.thbPerGram)}</dd>
+          <dt lang="th" className="text-ink-soft">{th("ornament")} <span lang="en" className="text-ink-muted">{en("ornament")}</span></dt><dd className="text-right font-semibold tabular-nums">{thb(perBaht)} {th("perBaht")}</dd>
+          <dt lang="th" className="text-ink-soft">{th("bar")} <span lang="en" className="text-ink-muted">{en("bar")}</span></dt><dd className="text-right font-semibold tabular-nums">{thb(ratePerBaht(rate.thbPerGram, "bar"))} {th("perBaht")}</dd>
+          <dt lang="th" className="text-ink-soft">{en("perGram")}</dt><dd className="text-right font-semibold tabular-nums">{thbPerGramText(rate.thbPerGram)}</dd>
           <dt className="text-ink-soft">XAU/USD</dt><dd className="text-right tabular-nums">{rate.usdPerOunce.toFixed(2)}</dd>
           <dt className="text-ink-soft">USD/THB</dt><dd className="text-right tabular-nums">{rate.usdToThb.toFixed(2)}</dd>
           <dt lang="th" className="text-ink-soft">{th("updated")}</dt><dd className="text-right tabular-nums">{formatDateTime(rate.updatedAt)}</dd>
@@ -112,7 +112,7 @@ type LockedProps = { thbPerGram: number; lockedAt: string; struck?: boolean };
 export function LockedRateStamp({ thbPerGram, lockedAt, struck = false }: LockedProps) {
   return (
     <div className={`inline-flex max-w-full flex-col px-4 py-2 ${frame} ${struck ? "stamp-strike" : "-rotate-2"}`} role="status">
-      <span className={label} lang="th">{th("rateLocked")} <span lang="en" className="font-semibold normal-case tracking-normal opacity-80">{S.rateLocked[1]}</span></span>
+      <span className={label} lang="th">{th("rateLocked")} <span lang="en" className="font-semibold normal-case tracking-normal opacity-80">{en("rateLocked")}</span></span>
       <span className="whitespace-nowrap text-display font-bold leading-none">
         {thb(ratePerBaht(thbPerGram))}<span className="text-compact font-semibold" lang="th"> {th("perBaht")}</span>
       </span>
