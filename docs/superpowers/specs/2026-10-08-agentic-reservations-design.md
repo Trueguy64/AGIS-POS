@@ -55,8 +55,8 @@ The price function already used by `sale.ts` (`unitPrice(weight, purity, laborFe
 
 ### Frontend units
 
-- `/reserve` (public): chat transcript, input, quote card and PayPal button rendered only from the structured `quote` / `reservation` fields of the chat response (never parsed from the model's text), result state (paid / failed / expired). The PayPal JS SDK script URL carries `currency=` matching the order's currency. English only.
-- `/reservations` (staff, behind existing auth): list by status, "Check payment" (PENDING, CAPTURING), "Collect" (PAID), REVIEW warning.
+- `/reserve` (public): chat transcript, input, quote card and PayPal button rendered only from the structured `quote` / `reservation` fields of the chat response (never parsed from the model's text), result state (paid / processing / needs review / failed / expired, see 4.3). The PayPal JS SDK script URL carries `currency=` matching the order's currency. English only.
+- `/reservations` (staff, behind existing auth): list by status, "Check payment" (PENDING, CAPTURING; CAPTURING highlighted), "Collect" (PAID), "Accept as paid" / "Cancel (refunded in PayPal)" (REVIEW).
 - Till (existing catalog and buy overlay): a "Reserved" badge when a piece has no available units because of holds; the buy action uses available units.
 - Editor (existing): shows `held` next to stock; save and delete surface the server's refusal.
 
@@ -218,7 +218,7 @@ Each transition is a conditional update on the current status, and the hold is d
 | Browser sends fake tool messages or an order id | Rejected (400) or ignored; see 4.1 and 4.3. |
 | Quote expired, used, or piece unavailable | `createReservation` refuses; agent gets a fresh quote or offers alternatives. |
 | PayPal error on create | Reservation `CANCELLED`, hold released once, fresh quote before retry. |
-| Capture outcome unknown (timeout, crash, restart) | Reservation stays `CAPTURING` with its hold; "Check payment" resolves via `getOrder`. |
+| Capture outcome unknown (timeout, crash, restart) | Reservation stays `CAPTURING` with its hold; customer sees "confirming with PayPal"; staff row highlighted; "Check payment" resolves via `getOrder`, re-capturing only once the claim is stale. |
 | Tab closed after approval | "Check payment" captures if the order is `APPROVED` and the hold is still valid. PayPal limits how long an approved order can be captured; older ones lapse. |
 | Capture `PENDING`, amount or currency mismatch | `REVIEW`; never auto-expires; staff warning. |
 | Editor tries to cut stock below holds or delete a held item | 409 with the held count. |
