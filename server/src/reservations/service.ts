@@ -140,12 +140,13 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
     const o = await paypal.getOrder(r.paypalOrderId!);
     if (o.kind === "ok" && o.value.orderStatus === "COMPLETED") return settle(r, o.value);
     if (!isStale(r) || o.kind === "unknown") return r;
+    if (o.kind === "refused" && o.status !== 404) return r;
     if (o.kind === "ok" && o.value.orderStatus === "APPROVED") {
       const claim = now();
       const took = await prisma.reservation.updateMany({ where: { id: r.id, status: "CAPTURING", claimedAt: r.claimedAt }, data: { claimedAt: claim } });
       return took.count === 1 ? doCapture(r, claim) : reload(r.id);
     }
-    // stale + neither COMPLETED nor APPROVED (VOIDED, 404, …)
+    // stale + lapsed (VOIDED, 404, …)
     await prisma.reservation.updateMany({ where: { id: r.id, status: "CAPTURING", claimedAt: r.claimedAt }, data: { status: "REVIEW", claimedAt: null } });
     return reload(r.id);
   }

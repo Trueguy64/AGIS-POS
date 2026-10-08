@@ -147,6 +147,39 @@ test("settlement: capture PENDING, other currency, other amount → REVIEW; expi
   assert.equal(await held(), 1);
 });
 
+test("stale capture: non-lapsed refused getOrder (429) leaves CAPTURING unchanged", async () => {
+  await prisma.reservation.update({ where: { id: rid }, data: { status: "CAPTURING", claimedAt: clock.now() } });
+  clock.advance(61_000);
+  fake.pp.script("getOrder", async () => ({ kind: "refused", status: 429, issue: "RATE_LIMIT_REACHED" } as const));
+  assert.equal((await svc.captureReservation(rid)).status, "CAPTURING");
+  assert.equal(await held(), 1);
+  assert.equal(captures(), 0);
+});
+
+test("ORDER_ALREADY_CAPTURED → settle from getOrder; one captureOrder call", async () => {
+  fake.pp.script("captureOrder", async () => ({ kind: "refused", status: 422, issue: "ORDER_ALREADY_CAPTURED" } as const));
+  fake.pp.script("getOrder", async () => ({ kind: "ok", value: fake.paid(449300) } as const));
+  assert.equal((await svc.captureReservation(rid)).status, "PAID");
+  assert.equal(captures(), 1);
+});
+
+test("late original capturer cannot revert a takeover", async () => {
+  const gate = deferred<void>();
+  fake.pp.script("captureOrder", async () => { await gate.p; return { kind: "refused", status: 422, issue: "INSTRUMENT_DECLINED" } as const; });
+  fake.pp.script("getOrder", async () => ({ kind: "ok", value: { orderStatus: "APPROVED" } } as const));
+  fake.pp.script("captureOrder", async () => ({ kind: "ok", value: fake.paid(449300) } as const));
+  const first = svc.captureReservation(rid);
+  await new Promise((r) => setTimeout(r, 10));
+  clock.advance(61_000);
+  const second = svc.captureReservation(rid);
+  await new Promise((r) => setTimeout(r, 10));
+  gate.resolve();
+  await second;
+  await first;
+  assert.equal(await status(), "PAID");
+  assert.equal(await held(), 1);
+});
+
 test("review actions: accept → PAID with new hold; cancel → CANCELLED released once; non-REVIEW unchanged", async () => {
   await prisma.reservation.update({ where: { id: rid }, data: { status: "REVIEW" } });
   const a = await svc.acceptReview(rid);
