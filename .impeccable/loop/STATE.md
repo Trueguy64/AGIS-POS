@@ -1,0 +1,11 @@
+# Redesign loop state (branch redesign-loop)
+
+Goal: no open P2/P3 audit findings (P1 Thai copy is human-only), and tsc, eslint, build, server tsc all clean.
+Order: harden (done f232512) -> adapt -> optimize -> polish -> audit (fresh re-audit; new findings re-enter queue).
+Caps: 5 attempts per step; stop and report to the user on the 5th failure, on any schema change, or after the re-audit.
+
+| # | step | attempt | result | commit |
+|---|------|---------|--------|--------|
+| 1 | harden | 1 | pass (Claude fixed randomUUID + legacy lock) | f232512 |
+| 2 | adapt | - | killed by Claude Code (low memory), not counted | - |
+| 3 | adapt | 1 | fail: exit 1, no output (likely gateway blip); round.sh now logs JSON | - |

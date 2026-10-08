@@ -120,7 +120,7 @@ function SearchBar() {
                     aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
                     autoComplete="off"
                 />
-                <button className="flex items-center bg-brass-100 px-4 text-brass-800 hover:bg-brass-300" type="submit" aria-label={both("searchPieces")}>
+                <button className="hidden items-center bg-brass-100 px-4 text-brass-800 hover:bg-brass-300 sm:flex" type="submit" aria-label={both("searchPieces")}>
                     <Search size={20} />
                 </button>
             </form>

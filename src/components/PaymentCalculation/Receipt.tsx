@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { CartItem, GoldRate, Promo } from "../../types/types"
 import type { PromoEnterData } from "../../schemas/promoSchemas";
 import PromosInput from "./PromosInput";
@@ -28,10 +29,25 @@ type ReceiptProps = {
  */
 function Receipt({ lines, promos, onAddPromo, onDeletePromo, onLock, subtotal, discount, total, goldRate, liveRate, lockedAt, interactable }: ReceiptProps) {
     const locked = Boolean(lockedAt && goldRate !== null);
+    const headerRef = useRef<HTMLElement>(null);
+    // Only pin the Lock button to the viewport bottom once the receipt header has
+    // scrolled past the fold. Otherwise the sticky footer covers the "Receipt"
+    // header as the receipt first appears on phones (audit P2).
+    const [headerPast, setHeaderPast] = useState(false);
+    useEffect(() => {
+        const el = headerRef.current;
+        if (!el || typeof IntersectionObserver === "undefined") return;
+        const obs = new IntersectionObserver(
+            (entries) => setHeaderPast(entries[0].boundingClientRect.bottom <= 0),
+            { threshold: 0 }
+        );
+        obs.observe(el);
+        return () => obs.disconnect();
+    }, []);
     return (
         <section className="flex min-h-0 w-full flex-1 flex-col" aria-labelledby="receipt-title">
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-slip border border-b-0 border-brass-300 bg-slip p-5">
-                <header className="flex flex-wrap items-start justify-between gap-3">
+                <header ref={headerRef} className="flex flex-wrap items-start justify-between gap-3">
                     <h2 id="receipt-title" className="shrink-0 whitespace-nowrap text-display font-bold text-ink"><Bi k="receipt" stack /></h2>
                     {locked
                         ? <LockedRateStamp thbPerGram={goldRate!} lockedAt={lockedAt!} struck />
@@ -86,8 +102,11 @@ function Receipt({ lines, promos, onAddPromo, onDeletePromo, onLock, subtotal, d
             {/* The slip's perforation */}
             <div className="border-t border-dashed border-brass-500" aria-hidden />
 
-            {/* Phones: the footer stays in thumb reach while the receipt is on screen. */}
-            <div className={`rounded-b-slip border border-t-0 border-brass-300 bg-slip p-4 ${interactable ? "sticky bottom-0 md:static" : "py-3"}`}>
+            {/* Phones: stick Lock to the viewport bottom, but only once the user has
+                scrolled past the receipt header, so it never covers the header as it
+                first appears (audit P2). md+ has its own scroll panel and the footer
+                is in normal flow. */}
+            <div className={`rounded-b-slip border border-t-0 border-brass-300 bg-slip p-4 ${headerPast && interactable ? "sticky bottom-0" : ""} md:static ${interactable ? "" : "py-3"}`}>
                 {interactable ? (
                     <button
                         type="button"

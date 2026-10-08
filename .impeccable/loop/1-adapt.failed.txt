@@ -1,0 +1,28 @@
+⚠ claude.ai connectors are disabled because ANTHROPIC_API_KEY or another auth source is set and takes precedence over your claude.ai login · Unset it to load your organization's connectors
+"minimax-m3" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within 200k tokens (the context window it assumes); if the model accepts more, append [1m] to the model name for 1M, or set CLAUDE_CODE_MAX_CONTEXT_TOKENS to its real window; CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1 restores the previous wait-for-the-API behavior.
+[claude-code:unrecognized_model] {"model":"minimax-m3","query_source":"sdk"}
+## Summary
+
+**Command run:** `impeccable adapt` — loaded the skill's `reference/adapt.md`, scan context (PRODUCT.md, DESIGN.md, audit), read the two in-scope files, applied the surgical fixes. The launcher binary `impeccable.cmd` only ships the `detect` helper (UI anti-pattern scan), not the design-workflow verbs — the `adapt` workflow lives in the skill reference, as the skill itself documents.
+
+**Audit findings addressed (Responsive Design P2, both):**
+
+1. **[P2] Sticky receipt footer covers the header on phones** — `src/components/PaymentCalculation/Receipt.tsx`. Added a `useRef` on the receipt `<header>` and an `IntersectionObserver` (`{ threshold: 0 }`) that flips `headerPast` true only when the header's `bottom` is at or above the viewport top. The Lock button now uses `sticky bottom-0` only when `headerPast && interactable`; otherwise it sits in normal flow at the end of the slip. This matches the audit's "pin the Lock button to the page (fixed) only while the receipt header is above the fold" recommendation, so the Lock is in thumb reach as soon as the cashier scrolls past the receipt header, but never covers the header as it first appears on phones. `md:static` keeps tablet/desktop behaviour identical.
+
+2. **[P2] Phone search pill is squeezed by the labelled stamp** — `src/components/common/SearchBar.tsx`. Changed the submit button from `flex …` to `hidden … sm:flex`. The ~36px brass-100 submit block disappears on phones, returning that width to the input; Enter still submits (the `<form onSubmit>` fires either way). On `sm` and up the button is back.
+
+**Files changed:**
+- `src/components/PaymentCalculation/Receipt.tsx` (added IO logic on `<header>`; switched footer sticky class to `headerPast && interactable` conditional)
+- `src/components/common/SearchBar.tsx` (search submit button hidden below `sm`)
+
+**Skipped:** `[P3] Printed item sub-line wraps` (P3, not P2, audit routes it to `/impeccable typeset`, and it's a print-formatting concern, not a screen responsive one — out of `/impeccable adapt` scope per the audit's own grouping).
+
+**Check results:**
+- `npx tsc -b` — exit 0, no output (clean)
+- `npx eslint .` — exit 0, no output (clean)
+- `npm run build` — exit 0, `✓ built in 3.98s`, no errors (one pre-existing Vite plugin-timing warning on `vite-plugin-svgr`, unrelated to changes)
+- `(cd server && npx tsc --noEmit)` — exit 0, no output (clean)
+
+Design system preserved: tokens, `Dialog`, `Bi`, strings in `src/lib/i18n.ts`, type scale, stamp, perforation — none touched. Only the responsive-class conditionals changed.
+
+→ Skipped: a Cypress/Playwright run for visual confirmation, add when an end-to-end runner is wired up for this project.
