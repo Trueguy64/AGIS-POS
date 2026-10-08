@@ -33,6 +33,7 @@ function EditorItemElement({ item, onEditClick, onDeleteClick }: EditorItemEleme
         {stock > 0
           ? <p className="text-ink-muted"><span className="tabular-nums">{stock}</span> <Bi k="stock" /></p>
           : <p className="font-semibold text-stamp"><Bi k="soldOut" /></p>}
+        {(item.held ?? 0) > 0 && <p className="text-stamp tabular-nums">{item.held} <Bi k="held" /></p>}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-2">
         <span className="font-bold text-brass-800 tabular-nums">{rate ? thb(itemPrice(item, rate.thbPerGram)) : "—"}</span>

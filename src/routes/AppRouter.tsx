@@ -10,6 +10,7 @@ import PaymentThankYou from "../pages/PaymentThankYou";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
 import ReservePage from "../pages/ReservePage";
+import ReservationsPage from "../pages/ReservationsPage";
 import ProtectedRoute from "../components/Authentication/ProtectedRoute";
 
 export default function AppRouter() {
@@ -21,6 +22,7 @@ export default function AppRouter() {
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/register" element={<RegisterPage />} />
                         <Route path="/reserve" element={<ReservePage />} />
+                        <Route path="/reservations" element={<ProtectedRoute><ReservationsPage /></ProtectedRoute>} />
 
                         <Route path="/" element={<ProtectedRoute><ItemSelectionMenu /></ProtectedRoute>} />
                         <Route path="/payment" element={<ProtectedRoute><PaymentCalculation /></ProtectedRoute>} />

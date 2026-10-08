@@ -16,12 +16,13 @@ type BuyItemOverlayProps = {
 function BuyItemOverlay({ item, onCancelClick, onAddToCart }: BuyItemOverlayProps) {
     const { id, title, stock, image, laborFee } = item;
     const rate = useGoldRate();
-    const soldOut = stock <= 0;
+    const available = stock - (item.held ?? 0);
+    const soldOut = available <= 0;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const formData = new FormData(e.target as HTMLFormElement);
-        const quantity = Math.max(1, Math.min(stock, parseInt(formData.get('quantity') as string) || 1));
+        const quantity = Math.max(1, Math.min(available, parseInt(formData.get('quantity') as string) || 1));
         onAddToCart(id, quantity);
     };
 
@@ -63,7 +64,7 @@ function BuyItemOverlay({ item, onCancelClick, onAddToCart }: BuyItemOverlayProp
                                 type="number"
                                 name="quantity"
                                 min={soldOut ? 0 : 1}
-                                max={stock}
+                                max={available}
                                 defaultValue={soldOut ? "0" : "1"}
                                 disabled={soldOut}
                                 className="h-12 w-24 rounded-slip border border-brass-300 bg-slip px-3 text-money font-semibold text-ink tabular-nums focus:border-brass-700 focus:outline-none disabled:opacity-50"

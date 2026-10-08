@@ -94,6 +94,16 @@ export const S = {
   ],
   saleNotFound: ["ไม่พบรายการขายนี้", "This sale could not be found"],
   loadingSale: ["กำลังโหลดใบเสร็จ…", "Loading receipt…"],
+  // reservations (Task 10)
+  reservations: ["การจอง", "Reservations"], // Thai pending native-speaker review
+  reserved: ["จองแล้ว", "Reserved"], // Thai pending native-speaker review
+  checkPayment: ["ตรวจการชำระ", "Check payment"], // Thai pending native-speaker review
+  collect: ["รับของ", "Collect"], // Thai pending native-speaker review
+  acceptPaid: ["ยืนยันว่าชำระแล้ว", "Accept as paid"], // Thai pending native-speaker review
+  cancelRefunded: ["ยกเลิก (คืนเงินใน PayPal แล้ว)", "Cancel (refunded in PayPal)"], // Thai pending native-speaker review
+  depositPaid: ["มัดจำ PayPal", "PayPal deposit"], // Thai pending native-speaker review
+  balance: ["ยอดคงเหลือ", "Balance"], // Thai pending native-speaker review
+  held: ["ถูกจอง", "held"], // Thai pending native-speaker review
 } as const satisfies Record<string, readonly [string, string]>;
 
 export type StrKey = keyof typeof S;

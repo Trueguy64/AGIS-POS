@@ -1,8 +1,10 @@
 import { Menu } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import SearchBar from '../common/SearchBar';
 import { useGoldRate } from '../../contexts/GoldRateContext';
 import { RateStamp } from '../RateStamp';
 import Wordmark from '../Wordmark';
+import Bi from '../Bi';
 import { both } from '../../lib/i18n';
 
 type NavBarProps = {
@@ -31,6 +33,13 @@ function NavBar({ onHamburgerButtonClick, sidebarOpen }: NavBarProps) {
             <div className="flex h-11 min-w-0 flex-1 items-center">
                 <SearchBar />
             </div>
+            <Link
+                to="/reservations"
+                className="flex h-11 items-center gap-1 rounded-slip px-3 font-semibold hover:bg-brass-800"
+                aria-label={both("reservations")}
+            >
+                <Bi k="reservations" />
+            </Link>
             <RateStamp rate={rate} />
         </nav>
     );

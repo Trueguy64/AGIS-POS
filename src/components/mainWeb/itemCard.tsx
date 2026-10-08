@@ -2,6 +2,7 @@ import { type Item } from "../../types/types";
 import { useGoldRate } from "../../contexts/GoldRateContext";
 import { describeGold, itemPrice, thb } from "../../lib/gold";
 import { imageUrl } from "../../api/item";
+import Bi from "../Bi";
 import { th } from "../../lib/i18n";
 
 type ItemProps = {
@@ -13,7 +14,9 @@ type ItemProps = {
 export default function ItemCard({ item, onItemClick }: ItemProps) {
   const { title, stock, image, category } = item;
   const rate = useGoldRate();
+  const available = stock - (item.held ?? 0);
   const soldOut = stock <= 0;
+  const reserved = !soldOut && available <= 0;
   const price = rate ? thb(itemPrice(item, rate.thbPerGram)) : null;
 
   return (
@@ -41,7 +44,9 @@ export default function ItemCard({ item, onItemClick }: ItemProps) {
         <div className="mt-auto flex items-baseline justify-between gap-2 pt-2">
           {soldOut
             ? <span className="whitespace-nowrap font-semibold text-stamp" lang="th">{th("soldOut")}</span>
-            : <span aria-hidden />}
+            : reserved
+              ? <span className="rounded-slip bg-stamp-tint px-2 text-stamp"><Bi k="reserved" /></span>
+              : <span aria-hidden />}
           <span className="text-money font-bold text-brass-800 tabular-nums">{price ?? "—"}</span>
         </div>
       </div>
