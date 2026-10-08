@@ -22,12 +22,10 @@ Target: PayPal AI Hackathon judges. English. Public YouTube upload; link in the 
 **Action.** Type:
 > *"Do you have a 1 baht gold bracelet?"*
 
-**On screen.** The chat shows a quote card: the piece title, the live price in THB, the deposit, and the policy line *"The deposit holds this piece and this price for 48 hours. If it is not collected in time, the deposit is forfeited."* The card is rendered from the server's structured response — never from the model's text.
+**Voice over.**
+> A customer opens the public reserve page and chats in English with the AGIS assistant. They type what they want. The chat shows a quote card with the piece, the live price in Thai baht, a 10% PayPal deposit, and the policy line — the deposit holds the piece and the price for 48 hours. The card is rendered from the server's structured response. The customer accepts in the chat, gives a name and an email, and the PayPal button appears.
 
-**Action.** In the chat, the customer accepts the quote and gives a name and an email:
-> *"Yes please. John Smith. `john@example.com`"*
-
-**On screen.** The PayPal button appears under the chat.
+**On screen.** The quote card, the chat reply, and the PayPal button under the chat.
 
 ---
 
@@ -36,11 +34,9 @@ Target: PayPal AI Hackathon judges. English. Public YouTube upload; link in the 
 **Action.** Click the PayPal button. The sandbox popup opens.
 
 **Voice over.**
-> The server confirms the payment with PayPal. No refresh needed.
+> They click the PayPal button. The sandbox popup opens. They sign in as the sandbox buyer, confirm the deposit, and return to the chat. The status line under the chat switches to: payment received, confirming with PayPal. A moment later it turns green: deposit paid, your piece is held for 48 hours, show your name at the counter.
 
-**On screen.** Sign in as the sandbox buyer, confirm the deposit, return to the chat. The status line under the chat switches to *"Payment received, confirming with PayPal…"*.
-
-**On screen.** A moment later, the status line turns green: *"Deposit paid. Your piece is held for 48 hours — show your name at the counter."*
+**On screen.** The PayPal popup, the sandbox sign-in, the confirmation, the chat status line switching through "Payment received, confirming with PayPal…" to the green "Deposit paid" line.
 
 ---
 
@@ -48,7 +44,10 @@ Target: PayPal AI Hackathon judges. English. Public YouTube upload; link in the 
 
 **On screen.** Cut to a new tab. Sign in at `/login` as the demo staff user. Open `/reservations`.
 
-**On screen.** The new booking row: status `PAID`, name, contact, piece, price, deposit, hold-until. The "Collect" button is on the right.
+**Voice over.**
+> Back in the shop, the staff user signs in and opens the reservations page. The new booking appears in the list: status PAID, customer name, contact, the piece, price, deposit, and the hold-until time. The Collect button is on the right.
+
+**On screen.** The new booking row in the staff `/reservations` list.
 
 ---
 
@@ -56,23 +55,23 @@ Target: PayPal AI Hackathon judges. English. Public YouTube upload; link in the 
 
 **Action.** Click **Collect** on the PAID row. The collection dialog opens.
 
-**On screen.** The dialog shows the piece price, the deposit paid, and the balance, with **Cash** and **PromptPay** toggle buttons.
+**Voice over.**
+> The staff clicks Collect on the PAID row. A dialog opens showing the piece price, the deposit paid, and the balance, with Cash and PromptPay toggle buttons. The customer chooses PromptPay, and the balance appears as a PromptPay QR. They click Collect. The reservation moves to COLLECTED, and the receipt shows the price, the deposit, and the balance — the same way any local customer would pay.
 
-**Action.** Click **PromptPay**. The balance appears as a PromptPay QR.
-
-**Action.** Click the **Collect** button at the bottom of the dialog.
-
-**On screen.** The reservation moves to `COLLECTED`. The receipt screen shows price, deposit paid, and balance.
+**On screen.** The collection dialog, the PromptPay QR, the final receipt.
 
 ---
 
 ## 2:10 — What makes it safe (2:10 → 2:30)
 
-**On screen.** A short split-screen with three captions.
+**Voice over.**
+> Three things make this safe. The server sets every price; the model can never state one. One capture per payment, with a request id so a retry cannot double-charge. Holds are released exactly once, and the captured amount is checked against the deposit.
 
-1. **Server-side prices.** The model can never state a price; it comes from the server's pricing function.
-2. **One capture, one hold.** PayPal request ids make a retry idempotent. A single-capturer state machine means a second attempt waits for the first.
-3. **Holds, not promises.** A reservation is a hold counter on the piece. The unit cannot be sold at the counter while the hold is alive.
+**On screen.** Three short captions, one per point:
+
+1. **Server sets every price.** The model can never state a price; it comes from the server's pricing function.
+2. **One capture per payment.** PayPal request ids make a retry idempotent. A single-capturer state machine means a second attempt waits for the first.
+3. **Holds released exactly once.** The hold counter is decremented in the same transaction as the status change, so it cannot run twice.
 
 ---
 
