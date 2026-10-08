@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../db";
 import { itemRegisterSchema, itemUpdateSchema } from "../schemas/ItemSchemas";
+import type { ItemModel, ItemWhereInput } from "../generated/prisma/models/Item";
 import fs from "fs/promises";
 import path from "path";
 
@@ -9,10 +10,57 @@ import path from "path";
 // carry `categoryId` and the frontend would have to look up the name itself.
 const itemWithCategory = { include: { category: true } } as const;
 
-export async function getInventory(_req: Request, res: Response) {
+// Response shape for GET /item/inventory. `hasUncategorized` is computed over the full
+// table so the cashier's sidebar can offer the "Uncategorized" row even when a filter
+// is active. `items` honours the active filter, if any.
+type InventoryResponse = { items: ItemModel[]; hasUncategorized: boolean };
+
+export async function getInventory(req: Request, res: Response) {
     try {
-        const items = await prisma.item.findMany(itemWithCategory);
-        res.json(items);
+        const search = String(req.query.search ?? "").trim();
+        const categoriesParam = String(req.query.categories ?? "").trim();
+        const tokens = categoriesParam ? categoriesParam.split(",").map((s) => s.trim()).filter(Boolean) : [];
+
+        // Resolve category names to ids in one query. The "none" token is the
+        // cashier's way of asking for items with no category — kept as a string
+        // so the URL is readable and the schema never sees a fake id.
+        const wantsUncategorized = tokens.includes("none");
+        const nameTokens = tokens.filter((t) => t !== "none");
+        const matchedCategories = nameTokens.length
+            ? await prisma.category.findMany({ where: { name: { in: nameTokens } }, select: { id: true } })
+            : [];
+        const matchedIds = matchedCategories.map((c) => c.id);
+
+        // Build the WHERE for the items query. nameTokens means "match by name",
+        // so the cashier can ask for an "Uncategorized" + named-category union
+        // without learning the underlying ids. Token names that didn't resolve
+        // to a real category are dropped silently: a renamed or deleted category
+        // just doesn't match, instead of erroring.
+        const andClauses: ItemWhereInput[] = [];
+        if (search) {
+            andClauses.push({
+                OR: [
+                    { title: { contains: search } },
+                    { description: { contains: search } },
+                ],
+            });
+        }
+        if (tokens.length > 0) {
+            const orArms: ItemWhereInput[] = [];
+            if (wantsUncategorized) orArms.push({ categoryId: null });
+            if (matchedIds.length > 0) orArms.push({ categoryId: { in: matchedIds } });
+            andClauses.push(orArms.length > 0 ? { OR: orArms } : { id: { equals: "__no_match__" } });
+        }
+
+        const where = andClauses.length > 0 ? { AND: andClauses } : undefined;
+        const items = await prisma.item.findMany({ ...itemWithCategory, where });
+
+        // hasUncategorized is independent of the filter: the sidebar needs it to decide
+        // whether to show the "Uncategorized" row at all.
+        const hasUncategorized = await prisma.item.findFirst({ where: { categoryId: null }, select: { id: true } });
+
+        const body: InventoryResponse = { items, hasUncategorized: Boolean(hasUncategorized) };
+        res.json(body);
     } catch {
         res.status(500).json({ error: "Internal server error" });
     }

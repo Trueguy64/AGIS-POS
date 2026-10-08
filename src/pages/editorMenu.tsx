@@ -24,6 +24,7 @@ function EditorMenu() {
     const [items, setItems] = useState<Item[]>();
     const [promos, setPromos] = useState<Promo[]>();
     const [categories, setCategories] = useState<Category[]>([]);
+    const [, setHasUncategorized] = useState(false); // accepted by /item/inventory, unused in the editor (sidebar shows real rows only)
 
     const [isSidebarOpen, setSidebarOpen] = useState(() => window.matchMedia("(min-width: 768px)").matches);
     const [isEditorOverlayOpen, setEditingOverlayOpen] = useState(false);
@@ -32,8 +33,9 @@ function EditorMenu() {
 
     useEffect(() => {
         Promise.all([getInventory(), getAllPromo(), getAllCategories()])
-            .then(([itemData, promoData, categoryData]) => {
-                setItems(itemData);
+            .then(([inv, promoData, categoryData]) => {
+                setItems(inv.items);
+                setHasUncategorized(inv.hasUncategorized);
                 setPromos(promoData);
                 setCategories(categoryData);
             })

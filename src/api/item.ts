@@ -12,7 +12,18 @@ function toFormData(data: Record<string, unknown>, file?: File): FormData {
   return fd;
 }
 
-export const getInventory = () => request<Item[]>("GET", "/item/inventory");
+export type InventoryResult = { items: Item[]; hasUncategorized: boolean };
+
+/** Build "/item/inventory?search=foo&categories=A,B" without sprinkling encodeURIComponent across callers. */
+function inventoryQuery({ search, categories }: { search?: string; categories?: string[] }): string {
+  const parts: string[] = [];
+  if (search) parts.push(`search=${encodeURIComponent(search)}`);
+  if (categories && categories.length) parts.push(`categories=${encodeURIComponent(categories.join(","))}`);
+  return parts.length ? `?${parts.join("&")}` : "";
+}
+
+export const getInventory = (params: { search?: string; categories?: string[] } = {}) =>
+  request<InventoryResult>("GET", `/item/inventory${inventoryQuery(params)}`);
 export const registerItem = (data: ItemRegisterInput, image: File) =>
   request<Item>("POST", "/item/new", toFormData(data as Record<string, unknown>, image));
 export const updateItem = (id: string, data: ItemUpdateInput, image?: File) =>

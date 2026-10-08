@@ -23,18 +23,35 @@ function ItemSelectionMenu() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-
-  const searchQuery = searchParams.get("search")?.toLowerCase() || "";
-  const selectedCategories = searchParams.get("categories")?.split(",").filter(Boolean) || [];
+  const [hasUncategorized, setHasUncategorized] = useState(false);
 
   useEffect(() => {
-    Promise.all([getInventory(), getAllCategories()])
-      .then(([itemData, categoryData]) => {
-        setItems(itemData);
-        setCategories(categoryData);
-      })
-      .catch((error) => console.error("Failed to fetch data", error));
+    getAllCategories()
+      .then(setCategories)
+      .catch((error) => console.error("Failed to fetch categories", error));
   }, []);
+
+  // The URL is the source of truth: search and category filters drive a server-side
+  // re-fetch, so the cashier never has the whole inventory in memory.
+  useEffect(() => {
+    let cancelled = false;
+    const search = searchParams.get("search") ?? "";
+    const categories = searchParams.get("categories")?.split(",").filter(Boolean) ?? [];
+    // AbortController is the right knob, but the shared `request` wrapper has no hook
+    // for it yet; on a fast cashier machine the worst case is one stale setState on
+    // an in-flight filter change, so we just guard with the `cancelled` flag.
+    getInventory({ search, categories })
+      .then((data) => {
+        if (cancelled) return;
+        setItems(data.items);
+        setHasUncategorized(data.hasUncategorized);
+      })
+      .catch((error) => { if (!cancelled) console.error("Failed to fetch inventory", error); });
+    return () => { cancelled = true; };
+  }, [searchParams]);
+
+  // Snapshot the current filter for the sidebar (which can't read searchParams inside its own render path).
+  const selectedCategories = searchParams.get("categories")?.split(",").filter(Boolean) ?? [];
 
   const navigate = useNavigate();
 
@@ -65,16 +82,6 @@ function ItemSelectionMenu() {
     });
   };
 
-  const filteredItems = items.filter((item) => {
-    const matchesCategory = selectedCategories.length === 0 ||
-      (selectedCategories.includes("none") && !item.categoryId) ||
-      (item.category && selectedCategories.includes(item.category.name));
-    const matchesSearch = !searchQuery ||
-      item.title.toLowerCase().includes(searchQuery) ||
-      item.description?.toLowerCase().includes(searchQuery);
-    return matchesCategory && matchesSearch;
-  });
-
   const bagCount = cart.reduce((n, c) => n + c.quantity, 0);
 
   return (
@@ -86,7 +93,7 @@ function ItemSelectionMenu() {
           isOpen={isSidebarOpen}
           categories={categories}
           selectedCategories={selectedCategories}
-          hasUncategorized={items.some((i) => !i.categoryId)}
+          hasUncategorized={hasUncategorized}
           onCategoryClick={handleCategoryClick}
         />
         {isSidebarOpen && (
@@ -94,7 +101,7 @@ function ItemSelectionMenu() {
         )}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <ItemsScroll items={filteredItems} onItemClick={setSelectedItem} />
+          <ItemsScroll items={items} onItemClick={setSelectedItem} />
 
           {/* The checkout bar: its own row, so it never covers a price, and in thumb reach on a phone. */}
           <div className="flex shrink-0 justify-end border-t border-brass-300 bg-paper px-3 py-2 md:px-4">

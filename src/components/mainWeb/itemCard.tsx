@@ -26,6 +26,8 @@ export default function ItemCard({ item, onItemClick }: ItemProps) {
         <img
           src={imageUrl(image)}
           alt=""
+          loading="lazy"
+          decoding="async"
           className={`h-full w-full object-cover ${soldOut ? "opacity-50 grayscale" : ""}`}
           onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/uploads/placeholder.png"; }}
         />
