@@ -97,6 +97,7 @@ test("PayPal create error → CANCELLED, hold released once", async () => {
   const row = await prisma.reservation.findFirstOrThrow();
   assert.equal(row.status, "CANCELLED");
   assert.equal((await prisma.item.findUniqueOrThrow({ where: { id: itemId } })).held, 0);
+  clock.advance(31 * 60_000);
   await svc.releaseExpired();
   assert.equal((await prisma.item.findUniqueOrThrow({ where: { id: itemId } })).held, 0);
 });
@@ -123,6 +124,15 @@ test("per-IP limit counts only live PENDING/CAPTURING, after expiry", async () =
   await assert.rejects(reserve((await svc.quotePrice(itemId)).quoteId), code("IP_LIMIT"));
   clock.advance(31 * 60_000);
   await reserve((await svc.quotePrice(itemId)).quoteId); // the first two expired
+});
+
+test("per-IP limit: concurrent reserves from one IP, count is inside the claim transaction", async () => {
+  await prisma.item.update({ where: { id: itemId }, data: { stock: 5 } });
+  const [a, b, c] = [await svc.quotePrice(itemId), await svc.quotePrice(itemId), await svc.quotePrice(itemId)];
+  const results = await Promise.allSettled([reserve(a.quoteId, "1.1.1.1"), reserve(b.quoteId, "1.1.1.1"), reserve(c.quoteId, "1.1.1.1")]);
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 2);
+  assert.ok(results.some((r) => r.status === "rejected" && code("IP_LIMIT")(r.reason)));
+  assert.equal((await prisma.item.findUniqueOrThrow({ where: { id: itemId } })).held, 2);
 });
 
 test("activeQuote: null when expired or used", async () => {

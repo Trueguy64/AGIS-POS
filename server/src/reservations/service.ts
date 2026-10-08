@@ -78,15 +78,15 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
     if (!q) throw new ReservationError("NOT_FOUND", "Quote not found");
     if (q.reservation) throw new ReservationError("QUOTE_USED", "This quote has already been used");
     if (q.expiresAt <= now()) throw new ReservationError("QUOTE_EXPIRED", "This quote has expired");
-    if (input.clientIp) {
-      const live = await prisma.reservation.count({ where: { clientIp: input.clientIp, status: { in: ["PENDING", "CAPTURING"] } } });
-      if (live >= config.maxPendingPerIp) throw new ReservationError("IP_LIMIT", "Too many unpaid reservations; please pay or wait for them to lapse");
-    }
     let r: Reservation;
     try {
       r = await withSqliteRetry(() => prisma.$transaction(async (tx) => {
         const claim = await tx.item.updateMany({ where: { id: q.itemId, stock: { gt: prisma.item.fields.held } }, data: { held: { increment: 1 } } });
         if (claim.count !== 1) throw new ReservationError("UNAVAILABLE", "This piece is no longer available"); // zero-row rule
+        if (input.clientIp) {
+          const live = await tx.reservation.count({ where: { clientIp: input.clientIp, status: { in: ["PENDING", "CAPTURING"] } } });
+          if (live >= config.maxPendingPerIp) throw new ReservationError("IP_LIMIT", "Too many unpaid reservations; please pay or wait for them to lapse");
+        }
         return tx.reservation.create({ data: { quoteId: q.id, itemId: q.itemId, customerName, contact, clientIp: input.clientIp, status: "PENDING", heldUntil: addMin(now(), config.pendingMinutes) } });
       }));
     } catch (e) {
