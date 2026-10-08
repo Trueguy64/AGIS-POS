@@ -102,6 +102,80 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
     throw new ReservationError("PAYPAL_UNAVAILABLE", "PayPal is unavailable, please try again");
   }
 
-  // captureReservation, acceptReview, cancelReview, list: Task 5
-  return { quotePrice, activeQuote, createReservation, releaseExpired, transition };
+  const load = (id: string) => prisma.reservation.findUnique({ where: { id }, include: { quote: true } });
+  type Loaded = NonNullable<Awaited<ReturnType<typeof load>>>;
+  const reload = async (id: string) => (await load(id))!;
+  const isStale = (r: Reservation) => !r.claimedAt || r.claimedAt.getTime() <= now().getTime() - config.captureStaleSeconds * 1000;
+
+  /** §4.3 step 7. Only from CAPTURING. */
+  async function settle(r: Loaded, info: OrderInfo) {
+    const ok = info.captureStatus === "COMPLETED" && info.capturedMinor === r.quote.depositMinor && info.currency === r.quote.currency;
+    await prisma.reservation.updateMany({
+      where: { id: r.id, status: "CAPTURING" },
+      data: ok
+        ? { status: "PAID", heldUntil: new Date(now().getTime() + config.holdMinutes * 60_000), captureStatus: info.captureStatus, capturedMinor: info.capturedMinor, claimedAt: null }
+        : { status: "REVIEW", captureStatus: info.captureStatus ?? null, capturedMinor: info.capturedMinor ?? null, claimedAt: null },
+    });
+    return reload(r.id);
+  }
+
+  /** §4.3 step 6. Caller must hold the claim (claimedAt === claim). */
+  async function doCapture(r: Loaded, claim: Date) {
+    const res = await paypal.captureOrder(r.paypalOrderId!, `capture-${r.id}`);
+    if (res.kind === "ok") return settle(r, res.value);
+    if (res.kind === "refused" && res.issue === "ORDER_ALREADY_CAPTURED") {
+      const o = await paypal.getOrder(r.paypalOrderId!);
+      return o.kind === "ok" && o.value.orderStatus === "COMPLETED" ? settle(r, o.value) : reload(r.id);
+    }
+    if (res.kind === "refused") {
+      const mine = { claimedAt: claim };
+      if (r.heldUntil > now()) await transition(r.id, "CAPTURING", "PENDING", { claimedAt: null }, false, mine);
+      else await transition(r.id, "CAPTURING", "CANCELLED", { claimedAt: null }, true, mine);
+    }
+    return reload(r.id); // unknown: stays CAPTURING
+  }
+
+  /** §4.3 step 4. Never calls captureOrder unless it takes over a stale claim. */
+  async function resolveCapturing(r: Loaded) {
+    const o = await paypal.getOrder(r.paypalOrderId!);
+    if (o.kind === "ok" && o.value.orderStatus === "COMPLETED") return settle(r, o.value);
+    if (!isStale(r) || o.kind === "unknown") return r;
+    if (o.kind === "ok" && o.value.orderStatus === "APPROVED") {
+      const claim = now();
+      const took = await prisma.reservation.updateMany({ where: { id: r.id, status: "CAPTURING", claimedAt: r.claimedAt }, data: { claimedAt: claim } });
+      return took.count === 1 ? doCapture(r, claim) : reload(r.id);
+    }
+    // stale + neither COMPLETED nor APPROVED (VOIDED, 404, …)
+    await prisma.reservation.updateMany({ where: { id: r.id, status: "CAPTURING", claimedAt: r.claimedAt }, data: { status: "REVIEW", claimedAt: null } });
+    return reload(r.id);
+  }
+
+  async function captureReservation(id: string) {
+    const r = await load(id);
+    if (!r) throw new ReservationError("NOT_FOUND", "Reservation not found");
+    if (r.status === "CAPTURING") return resolveCapturing(r);
+    if (r.status !== "PENDING" || !r.paypalOrderId) return r;
+    const claim = now();
+    const won = await prisma.reservation.updateMany({ where: { id, status: "PENDING", heldUntil: { gt: claim } }, data: { status: "CAPTURING", claimedAt: claim } });
+    if (won.count !== 1) {
+      await releaseExpired();
+      return reload(id);
+    }
+    return doCapture({ ...r, status: "CAPTURING", claimedAt: claim }, claim);
+  }
+
+  async function acceptReview(id: string) {
+    await transition(id, "REVIEW", "PAID", { heldUntil: new Date(now().getTime() + config.holdMinutes * 60_000) });
+    return reload(id);
+  }
+  async function cancelReview(id: string) {
+    await transition(id, "REVIEW", "CANCELLED", {}, true);
+    return reload(id);
+  }
+  async function list() {
+    await releaseExpired();
+    return prisma.reservation.findMany({ orderBy: { createdAt: "desc" }, include: { item: true, quote: true }, take: 200 });
+  }
+
+  return { quotePrice, activeQuote, createReservation, releaseExpired, captureReservation, acceptReview, cancelReview, list };
 }
