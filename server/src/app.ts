@@ -32,6 +32,12 @@ export function createApp() {
   app.use("/api/agent", agentRouter);
   app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+  if (process.env.NODE_ENV === "production") {
+    const dist = path.join(process.cwd(), "..", "dist");
+    app.use(express.static(dist));
+    app.get(/^\/(?!api|uploads).*/, (_req, res) => res.sendFile(path.join(dist, "index.html")));
+  }
+
   app.use(errorHandler); // last: catches anything passed to next(err), e.g. multer rejections
 
   return app;

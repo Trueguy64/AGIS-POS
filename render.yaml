@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: agis-reserve
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build && npm --prefix server ci && npm --prefix server exec prisma generate
+    startCommand: cd server && npm run start:demo
+    envVars:
+      - { key: NODE_ENV, value: production }
+      - { key: DATABASE_URL, value: "file:./demo.db" }
+      - { key: PENDING_MINUTES, value: "10" }
+      - { key: PAYPAL_CURRENCY, value: THB }
+      - { key: AI_MODEL, value: minimax-m3 }
+      - { key: AI_BASE_URL, sync: false }
+      - { key: AI_API_KEY, sync: false }
+      - { key: PAYPAL_CLIENT_ID, sync: false }
+      - { key: PAYPAL_SECRET, sync: false }
+      - { key: JWT_SECRET, generateValue: true }
+      - { key: DEMO_STAFF_EMAIL, sync: false }
+      - { key: DEMO_STAFF_PASSWORD, sync: false }

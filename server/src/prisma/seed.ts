@@ -1,4 +1,5 @@
 import { prisma } from "../db";
+import bcrypt from "bcryptjs";
 
 const PLACEHOLDER_IMAGE = "uploads/placeholder.png";
 
@@ -47,6 +48,19 @@ async function main() {
   await prisma.item.deleteMany({ where: { title: { in: items.map((i) => i.title) } } });
   for (const { category, ...i } of items) {
     await prisma.item.create({ data: { ...i, image: PLACEHOLDER_IMAGE, categoryId: categoryMap.get(category)! } });
+  }
+
+  if (process.env.DEMO_STAFF_EMAIL && process.env.DEMO_STAFF_PASSWORD) {
+    await prisma.user.upsert({
+      where: { email: process.env.DEMO_STAFF_EMAIL },
+      update: {},
+      create: {
+        email: process.env.DEMO_STAFF_EMAIL,
+        password: await bcrypt.hash(process.env.DEMO_STAFF_PASSWORD, 10),
+        name: "Demo Staff",
+        role: "Manager",
+      },
+    });
   }
 
   console.log("Seeded", { categories: await prisma.category.count(), items: await prisma.item.count() });
