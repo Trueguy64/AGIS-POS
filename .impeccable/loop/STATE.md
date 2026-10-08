@@ -11,3 +11,4 @@ Caps: 5 attempts per step; stop and report to the user on the 5th failure, on an
 | 3 | adapt | 1 | fail: exit 1, no output (likely gateway blip); round.sh now logs JSON | - |
 | 4 | adapt | 2 | pass (MiniMax, all checks clean) | da0e910 |
 | 5 | optimize | 1 | pass (MiniMax; Claude verified SQLite search stays case-insensitive) | 9a0ba19 |
+| 6 | polish | 1 | pass (MiniMax) | 24372d0 |
