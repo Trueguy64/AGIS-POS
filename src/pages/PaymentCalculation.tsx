@@ -4,7 +4,7 @@ import Receipt from "../components/PaymentCalculation/Receipt";
 import ShoppingBag from "../components/PaymentCalculation/ShoppingBag"
 import type { CartItem, Promo, RateLock } from '../types/types';
 import { useNavigate } from 'react-router-dom';
-import { useGoldRate } from '../contexts/GoldRateContext';
+import { useGoldRate, useGoldRateStatus } from '../contexts/GoldRateContext';
 import { computeTotals, getCart, getPromos, newSaleKey, setCart, setLock, setPromos as persistPromos } from '../lib/checkout';
 
 function PaymentCalculation() {
@@ -13,14 +13,17 @@ function PaymentCalculation() {
     const [locking, setLocking] = useState<RateLock | null>(null);
     const navigate = useNavigate();
     const rate = useGoldRate();
+    const { retry: retryRate } = useGoldRateStatus();
 
     const { subtotal, discount, total } = computeTotals(cartItems, promos, rate?.thbPerGram ?? 0);
 
     // Lock: freeze the rate, strike the stamp on this receipt, then move to payment.
     // The saleKey is generated here (not at submit time) so a retried POST that already
     // succeeded server-side is recognised and the cashier is not double-charged.
+    // A stale rate is a hard stop: locking it would record a sale the shop cannot defend
+    // if the market moves while the connection is down (audit 2026-10-08).
     const handleLock = () => {
-        if (!rate || locking) return;
+        if (!rate || rate.stale || locking) return;
         const lock: RateLock = {
             goldRate: rate.thbPerGram,
             lockedAt: new Date().toISOString(),
@@ -68,6 +71,8 @@ function PaymentCalculation() {
                 onAddPromo={handleAddPromo}
                 onDeletePromo={handleDeletePromo}
                 onLock={handleLock}
+                rateStale={rate?.stale === true}
+                onRetryRate={retryRate}
                 subtotal={subtotal}
                 discount={discount}
                 total={total}

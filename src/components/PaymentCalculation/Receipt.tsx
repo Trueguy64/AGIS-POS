@@ -14,6 +14,10 @@ type ReceiptProps = {
     onAddPromo?: (data: PromoEnterData) => Promise<void>;
     onDeletePromo?: (id: string) => void;
     onLock?: () => void;
+    /** Stale rate can't be locked — show a hint and disable the Lock button. (audit 2026-10-08) */
+    rateStale?: boolean;
+    /** Re-fetch the live rate from the gold feed (the stamp's Retry path). */
+    onRetryRate?: () => void;
     subtotal: number;
     discount: number;
     total: number;
@@ -27,7 +31,7 @@ type ReceiptProps = {
  * The weigh slip. Lines, then discounts, then one rule, then Subtotal / Discount / Total.
  * The header's right slot holds the live stamp until Lock is pressed, then the struck one in the same place.
  */
-function Receipt({ lines, promos, onAddPromo, onDeletePromo, onLock, subtotal, discount, total, goldRate, liveRate, lockedAt, interactable }: ReceiptProps) {
+function Receipt({ lines, promos, onAddPromo, onDeletePromo, onLock, rateStale, onRetryRate, subtotal, discount, total, goldRate, liveRate, lockedAt, interactable }: ReceiptProps) {
     const locked = Boolean(lockedAt && goldRate !== null);
     const headerRef = useRef<HTMLElement>(null);
     // Only pin the Lock button to the viewport bottom once the receipt header has
@@ -108,22 +112,38 @@ function Receipt({ lines, promos, onAddPromo, onDeletePromo, onLock, subtotal, d
                 is in normal flow. */}
             <div className={`rounded-b-slip border border-t-0 border-brass-300 bg-slip p-4 ${headerPast && interactable ? "sticky bottom-0" : ""} md:static ${interactable ? "" : "py-3"}`}>
                 {interactable ? (
-                    <button
-                        type="button"
-                        className="flex h-14 w-full items-center justify-center gap-3 rounded-slip bg-brass-700 px-4 text-slip hover:bg-brass-800 disabled:cursor-not-allowed disabled:opacity-50"
-                        onClick={onLock}
-                        disabled={!goldRate || total <= 0 || locked}
-                        aria-busy={locked}
-                    >
-                        {goldRate ? (
-                            <span className="flex flex-col items-center leading-tight">
-                                <span className="text-money font-bold" lang="th">{th("lockAndContinue")} <span className="tabular-nums">{thb(ratePerBaht(goldRate))}{th("perBaht")}</span></span>
-                                <span lang="en" className="text-compact opacity-80">{en("lockAndContinue")}</span>
-                            </span>
-                        ) : (
-                            <Bi k="waitingForRate" stack className="items-center text-money font-bold" />
+                    <>
+                        {rateStale && !locked && (
+                            <p className="mb-2 rounded-slip bg-stamp-tint p-2 text-stamp" role="alert">
+                                <span lang="th">{th("rateStaleLock")}</span>
+                                <span lang="en" className="block text-compact">{en("rateStaleLock")}</span>
+                                {onRetryRate && (
+                                    <>
+                                        {" "}
+                                        <button type="button" onClick={onRetryRate} className="font-bold underline hover:no-underline">
+                                            <span lang="th">{th("retry")}</span> · <span lang="en">{en("retry")}</span>
+                                        </button>
+                                    </>
+                                )}
+                            </p>
                         )}
-                    </button>
+                        <button
+                            type="button"
+                            className="flex h-14 w-full items-center justify-center gap-3 rounded-slip bg-brass-700 px-4 text-slip hover:bg-brass-800 disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={onLock}
+                            disabled={!goldRate || total <= 0 || locked || Boolean(rateStale)}
+                            aria-busy={locked}
+                        >
+                            {goldRate ? (
+                                <span className="flex flex-col items-center leading-tight">
+                                    <span className="text-money font-bold" lang="th">{th("lockAndContinue")} <span className="tabular-nums">{thb(ratePerBaht(goldRate))}{th("perBaht")}</span></span>
+                                    <span lang="en" className="text-compact opacity-80">{en("lockAndContinue")}</span>
+                                </span>
+                            ) : (
+                                <Bi k="waitingForRate" stack className="items-center text-money font-bold" />
+                            )}
+                        </button>
+                    </>
                 ) : (
                     <p className="text-center text-ink-muted"><Bi k="lockedForSale" /></p>
                 )}

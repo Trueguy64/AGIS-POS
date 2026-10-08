@@ -1,12 +1,14 @@
 import { useState, type ChangeEvent, type SubmitEvent } from "react";
-import type { Category, Item } from "../../types/types";
+import type { Category } from "../../types/types";
+import type { ItemRegisterInput } from "../../schemas/itemSchemas";
 import EditorOverlay from "./editorOverlay";
 import GoldFields, { fieldInput, fieldLabel } from "./goldFields";
 import ImageField from "./imageField";
 
 type EditorItemAddOverLayProps = {
     onCancelClick: () => void;
-    onSave: (item: Omit<Item, "image">, image: File) => void;
+    /** No id / updatedAt — the server creates both and returns the real row. */
+    onSave: (item: ItemRegisterInput, image: File) => void;
     categories: Category[];
 }
 
@@ -32,15 +34,14 @@ function EditorItemAddOverLay({ onCancelClick, onSave, categories }: EditorItemA
     const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (image === undefined) return;
+        // No id / updatedAt — the server creates both and returns the real row.
         onSave({
-            id: Date.now().toString(),
             title,
             categoryId: categories.find((c) => c.name === category)?.id,
             stock: Number(stock) || 0,
             weight: Number(weight),
             purity,
             laborFee: Number(laborFee) || 0,
-            updatedAt: new Date().toISOString(),
         }, image);
     };
 

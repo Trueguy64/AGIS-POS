@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import EditorNavBar from "../components/editorSide/editorNavBar";
 import EditorSidebar from "../components/editorSide/editorSideBar";
@@ -8,6 +8,7 @@ import EditorDeleteConfirmation from "../components/editorSide/editorDeleteConfi
 import EditorItemScroll from "../components/editorSide/editorItemScroll";
 import EditorPageSelector from "../components/editorSide/editorPageSelector";
 import type { Category, Item, Promo } from "../types/types";
+import type { ItemRegisterInput } from "../schemas/itemSchemas";
 import { deleteItem, getInventory, registerItem, updateItem } from "../api/item";
 import { addPromo, updatePromo, getAllPromo, deletePromo } from "../api/promo";
 import { getAllCategories, createCategory, updateCategory, deleteCategory } from "../api/category";
@@ -19,7 +20,12 @@ function EditorMenu() {
     const currentPage = Number(searchParams.get("page")) || 1;
     const currentRow = Number(searchParams.get("row")) || 25;
     const searchQuery = searchParams.get("search")?.toLowerCase() || "";
-    const selectedCategories = searchParams.get("categories")?.split(",").filter(Boolean) || [];
+    // useMemo so the array reference is stable across renders — otherwise the inventory
+    // effect would re-fire on every keystroke / unrelated re-render.
+    const selectedCategories = useMemo(
+        () => searchParams.get("categories")?.split(",").filter(Boolean) || [],
+        [searchParams]
+    );
 
     const [items, setItems] = useState<Item[]>();
     const [promos, setPromos] = useState<Promo[]>();
@@ -32,30 +38,34 @@ function EditorMenu() {
     const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
 
     useEffect(() => {
-        Promise.all([getInventory(), getAllPromo(), getAllCategories()])
-            .then(([inv, promoData, categoryData]) => {
-                setItems(inv.items);
-                setHasUncategorized(inv.hasUncategorized);
+        // Metadata (promos and categories) is shared across filters and only needs to load once.
+        Promise.all([getAllPromo(), getAllCategories()])
+            .then(([promoData, categoryData]) => {
                 setPromos(promoData);
                 setCategories(categoryData);
             })
-            .catch((error) => console.error("Failed to load data", error));
+            .catch((error) => console.error("Failed to load editor metadata", error));
     }, []);
 
-    const filteredItems = items?.filter((item) => {
-        const matchesCategory = selectedCategories.length === 0 ||
-            (selectedCategories.includes("none") && !item.categoryId) ||
-            (item.category && selectedCategories.includes(item.category.name));
-        const matchesSearch = !searchQuery ||
-            item.title.toLowerCase().includes(searchQuery) ||
-            item.description?.toLowerCase().includes(searchQuery);
-        return matchesCategory && matchesSearch;
-    }) || [];
+    // Inventory re-fetches on filter change so the editor never paginates the whole
+    // table on the client (audit 2026-10-08). The endpoint already accepts these params;
+    // pagination (page/row) stays client-side and is a follow-up optimisation.
+    useEffect(() => {
+        let cancelled = false;
+        getInventory({ search: searchQuery, categories: selectedCategories })
+            .then((inv) => {
+                if (cancelled) return;
+                setItems(inv.items);
+                setHasUncategorized(inv.hasUncategorized);
+            })
+            .catch((error) => { if (!cancelled) console.error("Failed to fetch inventory", error); });
+        return () => { cancelled = true; };
+    }, [searchQuery, selectedCategories]);
 
-    const currentItems = filteredItems.slice((currentPage - 1) * currentRow, currentPage * currentRow);
-    const totalPage = Math.ceil((filteredItems.length || 1) / currentRow);
+    const currentItems = items?.slice((currentPage - 1) * currentRow, currentPage * currentRow) ?? [];
+    const totalPage = Math.ceil(((items?.length ?? 0) || 1) / currentRow);
     const globalIndexOf = (index: number) => {
-        const i = items?.findIndex((it) => it.id === currentItems[index].id) ?? -1;
+        const i = items?.findIndex((it) => it.id === currentItems[index]?.id) ?? -1;
         return i === -1 ? null : i;
     };
 
@@ -125,11 +135,12 @@ function EditorMenu() {
     }
 
     // Items
-    async function handleAddItem(item: Omit<Item, "image">, imageFile: File) {
+    async function handleAddItem(item: ItemRegisterInput, imageFile: File) {
         try {
             const created = await registerItem(item, imageFile);
             setItems((prev) => [created, ...prev ?? []]);
-            setSearchParams({ page: '1' });
+            // Function form preserves the active ?search and ?categories (audit 2026-10-08).
+            setSearchParams((prev) => { prev.set("page", "1"); return prev; });
         } catch (err) {
             alert("Failed to add item: " + errMsg(err));
         }

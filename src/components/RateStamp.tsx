@@ -83,7 +83,7 @@ function LivePopover({ rate, compact }: LoadedProps) {
         aria-label={`${both("rate")}: ${th("ornament")} ${thb(perBaht)} ${th("perBaht")}${stale ? `, ${both("stale")}` : ""}`}
       >
         <span className={label} lang="th">{th("ornament")}</span>
-        <span className="whitespace-nowrap font-bold leading-none sm:text-display" aria-live="polite" aria-atomic="true">
+        <span className="whitespace-nowrap font-bold leading-none sm:text-display">
           <RollingText text={thb(perBaht)} />
           <span className="text-compact font-semibold" lang="th"> {th("perBaht")}</span>
         </span>

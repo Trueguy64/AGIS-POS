@@ -3,6 +3,7 @@ import type { Item } from "../../types/types";
 import { useGoldRate } from "../../contexts/GoldRateContext";
 import { describeGold, itemPrice, thb } from "../../lib/gold";
 import { imageUrl } from "../../api/item";
+import Bi from "../Bi";
 
 type EditorItemElementProps = {
   item: Item;
@@ -27,9 +28,11 @@ function EditorItemElement({ item, onEditClick, onDeleteClick }: EditorItemEleme
         <p className="line-clamp-2 font-semibold leading-snug text-ink md:truncate">{title}</p>
         <p className="truncate text-ink-soft">
           {describeGold(item)}
-          <span className="hidden md:inline"> · labor {thb(laborFee)}{category ? ` · ${category.name}` : ""}</span>
+          <span className="hidden md:inline"> · <Bi k="laborFee" thOnly /> {thb(laborFee)}{category ? ` · ${category.name}` : ""}</span>
         </p>
-        <p className={stock > 0 ? "text-ink-muted" : "font-semibold text-stamp"}>{stock > 0 ? `${stock} in stock` : "Sold out"}</p>
+        {stock > 0
+          ? <p className="text-ink-muted"><span className="tabular-nums">{stock}</span> <Bi k="stock" /></p>
+          : <p className="font-semibold text-stamp"><Bi k="soldOut" /></p>}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-2">
         <span className="font-bold text-brass-800 tabular-nums">{rate ? thb(itemPrice(item, rate.thbPerGram)) : "—"}</span>

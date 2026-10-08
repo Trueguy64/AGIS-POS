@@ -24,6 +24,7 @@ export const S = {
   retry: ["ลองใหม่", "Retry"],
   stale: ["ราคาเก่า", "Stale"],
   rateLocked: ["ล็อกราคาแล้ว", "Rate locked"],
+  rateStaleLock: ["ราคานี้เก่าแล้ว · ลองใหม่ก่อนล็อก", "This rate is stale · Retry before locking"], // Thai added 2026-10-08, awaits native-speaker review with the rest of the table
   rateDetails: ["ที่มาของราคา", "How the rate is made"],
   updated: ["อัปเดต", "Updated"],
   // catalog & bag
