@@ -51,9 +51,10 @@ Sign in at `/login`, then open `/reservations` to see the table of recent bookin
    > Do you have a 1 baht gold bracelet?
 
    The agent should match the seeded "Link Bracelet 1 Baht" (stock 5) and propose it as a
-   priced quote card. Tap **Accept** on the quote card, fill in a customer name and email,
-   and tap **Reserve**. The chat then shows the PayPal button. Do not compare or quote
-   prices from outside AGIS — they track the live Thai gold bar rate on every page load.
+   priced quote card. The customer accepts the quote and gives a name and an email in the
+   chat (for example: "Yes please. John Smith. [email protected]"); the PayPal button then
+   appears below the chat. Do not compare or quote prices from outside AGIS — they track
+   the live Thai gold bar rate on every page load.
 3. **Pay the deposit as the sandbox buyer.** Tap the PayPal button, sign in with the
    sandbox credentials above, confirm the test payment, and return to `/reserve`. The chat
    panel will switch through "confirming with PayPal" to a green **Deposit paid**.
@@ -86,9 +87,7 @@ Thirteen pieces across five categories, each with stock >= 2:
 
 - **First request is slow.** The Render free instance is cold-starting; refresh after a
   minute.
-- **Login fails.** Confirm the credentials match the staff email and password above — the
-  seed only runs when both `DEMO_STAFF_EMAIL` and `DEMO_STAFF_PASSWORD` are set on the
-  hosting service.
+- **Login fails.** Check the staff email and password above.
 - **Reservation missing from `/reservations`.** Every state reset wipes prior bookings.
   If the service restarted between paying and checking, the reservation is gone.
 - **PayPal button does nothing.** The sandbox is offline or unavailable right now; try
