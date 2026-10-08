@@ -1,6 +1,6 @@
 # Agentic Reservations — Design
 
-Date: 2026-10-08 · Status: draft for review (rev 2) · Target: PayPal AI Hackathon (Devpost), submission deadline 2026-11-12 12:00 PT
+Date: 2026-10-08 · Status: draft for review (rev 3) · Target: PayPal AI Hackathon (Devpost), submission deadline 2026-11-12 12:00 PT
 
 ## 1. Intent
 
@@ -115,8 +115,9 @@ Available units of an item = `stock - held`. Statuses that hold a unit: `PENDING
 | `PAYPAL_CLIENT_ID`, `PAYPAL_SECRET`, `PAYPAL_BASE` | —, —, `https://api-m.sandbox.paypal.com` | PayPal sandbox |
 | `DEPOSIT_PERCENT` | `10` | Deposit share of the price |
 | `QUOTE_MINUTES` | `15` | Quote validity |
-| `PENDING_MINUTES` | `30` | Hold while the customer approves the payment |
+| `PENDING_MINUTES` | `30` | Hold while the customer approves the payment; the hosted demo uses `10` |
 | `HOLD_MINUTES` | `2880` | Hold after payment (48 h); demo may use `2` |
+| `CAPTURE_STALE_SECONDS` | `60` | Age after which a `CAPTURING` claim may be taken over; must exceed the 20 s PayPal timeout |
 
 ## 4. Flows
 
@@ -125,7 +126,8 @@ Available units of an item = `stock - held`. Statuses that hold a unit: `PENDING
 **Request.** `POST /agent/chat` with `{ messages, activeQuoteId? }`.
 - `messages`: only `{ role: "user" | "assistant", content: string }` entries are accepted; any other role or non-string content is a 400. This keeps a browser from injecting fake tool calls or tool results.
 - Caps: at most 20 messages of history, each at most 1,000 characters (400 otherwise); at most 5 tool calls per turn.
-- `activeQuoteId`: the quote shown on the page, if any. The server loads it and, if it exists and has not expired, adds a short system note for this turn ("Active quote Q: item, price, deposit, expires at …"), so the model can call `createReservation` with it on a later turn without the id surviving in chat text. An unknown or expired id is dropped silently.
+- `activeQuoteId`: the quote shown on the page, if any. The server loads it and, if it exists, has not expired and has no reservation yet, adds a short system note for this turn ("Active quote Q: item, price, deposit, expires at …"), so the model can call `createReservation` with it on a later turn without the id surviving in chat text. An unknown, expired or already-used id is dropped silently. The page clears `activeQuoteId` when a response carries a `reservation`.
+- Holding limits: at most one `createReservation` call per turn (further calls in the same turn are refused with a tool error), and at most two `PENDING` / `CAPTURING` reservations per client IP at a time.
 
 **Response.** `{ reply: string, quote?: QuoteCard, reservation?: { reservationId, paypalOrderId, currency } }`. `quote` and `reservation` are built on the server from the tool results of this turn; the page renders the card and the PayPal button only from these fields.
 
@@ -145,30 +147,30 @@ Available units of an item = `stock - held`. Statuses that hold a unit: `PENDING
 
 ### 4.3 Capture
 
-`captureReservation(id)` runs for `POST /reservation/:id/capture` (public, called by the PayPal button after approval) and for the staff "Check payment" action. The request body is ignored; nothing in it is read.
+`captureReservation(id)` runs for `POST /reservation/:id/capture` (public, called by the PayPal button after approval) and for the staff "Check payment" action. The request body is ignored; nothing in it is read. `reservations/` takes an injectable `now()`; `paypal/` calls use an explicit 20-second timeout. `CAPTURE_STALE_SECONDS` (default 60) is longer than that timeout, so a stale claim can only mean the first attempt has ended.
 
 1. Load the reservation and use its stored `paypalOrderId`.
 2. Status `PAID`, `REVIEW` or `COLLECTED`: return it unchanged.
-3. Status `CAPTURING`: go to step 7 (resolve).
-4. Status `EXPIRED` or `CANCELLED`: return it unchanged; no money moves.
-5. Status `PENDING`: claim the capture with a conditional update `PENDING → CAPTURING` where `status = PENDING` and `heldUntil > now`.
+3. Status `EXPIRED` or `CANCELLED`: return it unchanged; no money moves.
+4. Status `CAPTURING` (another caller holds the claim, or an earlier attempt ended unknown): call `getOrder` only.
+   - Order `COMPLETED`: settle (step 7).
+   - Order `APPROVED` and the claim is stale (`updatedAt` older than `CAPTURE_STALE_SECONDS`): take over the claim with a conditional update that bumps `updatedAt` (`where status = CAPTURING and updatedAt = <value read>`); if it changed one row, go to step 6, otherwise return.
+   - Order `APPROVED` and the claim is fresh, or any other order status: return the reservation unchanged (the first caller is still working).
+5. Status `PENDING`: claim the capture with a conditional update `PENDING → CAPTURING` where `status = PENDING` and `heldUntil > now()`.
    - If no row changed and `heldUntil` has passed: run expiry release for it (→ `CANCELLED`, hold released) and return; the approved PayPal order lapses.
    - If no row changed otherwise, another caller won: reload and return the current status.
    - The reservation's own claim is its hold, so no stock check is made here (a reservation never counts its own hold against itself). Expiry never touches `CAPTURING` (4.6).
-6. Call `paypal.captureOrder(paypalOrderId, requestId = "capture-" + id)`; the request id makes repeats safe.
-   - Definite refusal because the order is already captured: go to step 7.
-   - Other definite refusal (order not approved, declined): conditional update `CAPTURING → PENDING` if `heldUntil > now`, otherwise `CAPTURING → CANCELLED` and release the hold; return.
-   - Unknown outcome (timeout, network error, 5xx, process crash): leave `CAPTURING`; return. "Check payment" resolves it later.
-   - Success: go to step 8 with the returned `OrderInfo`.
-7. Resolve: `paypal.getOrder(paypalOrderId)`.
-   - Order `COMPLETED`: go to step 8 with its `OrderInfo` (no second capture).
-   - Order `APPROVED` and status is `CAPTURING`: go to step 6.
-   - Any other order status: leave the reservation unchanged and return.
-8. Settle with a conditional update `where: { id, status: "CAPTURING" }`, storing `captureStatus` and `capturedMinor`:
-   - `captureStatus === "COMPLETED"` and `capturedMinor === quote.depositMinor` and currency equal → `PAID`, `heldUntil = now + HOLD_MINUTES`.
-   - Anything else (capture `PENDING`, different amount, different currency) → `REVIEW`. REVIEW keeps its hold and never expires automatically; staff resolve it in the PayPal dashboard.
+6. Only the caller holding the claim (it won step 5 or took over a stale claim in step 4) calls `paypal.captureOrder(paypalOrderId, requestId = "capture-" + id)`; the request id makes repeats safe.
+   - Success, or a refusal saying the order is already captured: `getOrder` if needed, then settle (step 7).
+   - Other definite refusal (order not approved, declined): conditional update `CAPTURING → PENDING` if `heldUntil > now()`, otherwise `CAPTURING → CANCELLED` and release the hold; return.
+   - Unknown outcome (timeout, network error, 5xx, process crash): leave `CAPTURING`; return. A later "Check payment" resolves it through step 4.
+7. Settle with a conditional update `where: { id, status: "CAPTURING" }`, storing `captureStatus` and `capturedMinor`:
+   - `captureStatus === "COMPLETED"` and `capturedMinor === quote.depositMinor` and currency equal → `PAID`, `heldUntil = now() + HOLD_MINUTES`.
+   - Anything else (capture `PENDING`, different amount, different currency) → `REVIEW`. REVIEW keeps its hold and never expires automatically; staff resolve it (4.5).
 
-Every status change above is conditional on the status read in that step, so concurrent captures, "Check payment" and expiry cannot both apply a transition.
+Every status change above is conditional on the status read in that step, so concurrent captures, "Check payment" and expiry cannot both apply a transition, and only one caller at a time can call `captureOrder`.
+
+The capture route returns the reservation status; `/reserve` shows paid (`PAID`), processing (`CAPTURING`: "Payment received, confirming with PayPal", polls the status every 5 seconds for up to 2 minutes), needs review (`REVIEW`: "Payment received; the shop will confirm"), failed (`PENDING` after a refusal), or expired (`CANCELLED` / `EXPIRED`).
 
 ### 4.4 Collect
 
@@ -178,7 +180,8 @@ Every status change above is conditional on the status read in that step, so con
 - Otherwise the reservation must be `PAID` and `heldUntil` not passed, else 409. An expired reservation is rung up as a normal sale at today's rate, without `reservationId`.
 - The line is taken from the reservation (its item, quantity 1, the quote's `goldRate` and price), not from the browser's cart or `goldRate`.
 - Total due at the counter = `priceSatang − depositSatang` (both THB, from the quote, regardless of the currency PayPal charged); the receipt shows price, deposit paid via PayPal, and balance.
-- In one transaction: create the Sale, decrement the item's `stock` and `held` by 1, and set the reservation `PAID → COLLECTED` with `saleId` (conditional on `status = PAID`; if it changed no row, the transaction rolls back and the request returns 409).
+- In one transaction: create the Sale, decrement the item's `stock` and `held` by 1, and set the reservation `PAID → COLLECTED` with `saleId` (conditional on `status = PAID`).
+- If the transaction fails on the unique `saleKey` or the conditional update changes no row (a concurrent collection won), the handler runs the replay lookup again and returns the existing sale. Only if no sale exists for the key does it return 409.
 - No availability check against other holds is made for this line: the unit was claimed by this reservation.
 
 Normal sales (no `reservationId`) keep today's behaviour, except the stock check uses available units (`stock - held`) so a held piece cannot be sold at the counter.
@@ -186,9 +189,11 @@ Normal sales (no `reservationId`) keep today's behaviour, except the stock check
 ### 4.5 Staff page and editor rules
 
 The reservations list shows reservations newest first with status, customer, contact, piece, price, deposit, `heldUntil`. Actions:
-- "Check payment" on `PENDING` and `CAPTURING` rows runs `captureReservation`.
+- "Check payment" on `PENDING` and `CAPTURING` rows runs `captureReservation`. `CAPTURING` rows are highlighted ("Confirming with PayPal — press Check payment"), since nothing else prompts staff.
 - "Collect" on `PAID` rows.
-- `REVIEW` rows show "Payment needs review in PayPal (capture status / amount does not match)" and no action button.
+- `REVIEW` rows show "Payment needs review in PayPal (capture status / amount does not match)" and two actions, each a conditional update on `status = REVIEW`:
+  - "Accept as paid": `REVIEW → PAID`, `heldUntil = now() + HOLD_MINUTES` (hold kept).
+  - "Cancel (refunded in PayPal)": `REVIEW → CANCELLED`, hold released.
 
 Contact details appear only here, behind staff login.
 
@@ -221,7 +226,7 @@ Each transition is a conditional update on the current status, and the hold is d
 
 ## 6. Testing
 
-Runner: Node's built-in `node:test` via `tsx` (already a server dev dependency); no new test dependencies. Each test file uses a fresh temporary SQLite database migrated with `prisma migrate deploy`. `paypal/` and the model client receive a fake `fetch` whose responses (including delays and failures) each test controls.
+Runner: Node's built-in `node:test` via `tsx` (already a server dev dependency); no new test dependencies. Each test file uses a fresh temporary SQLite database migrated with `prisma migrate deploy`. `paypal/` and the model client receive a fake `fetch` whose responses (including delays and failures) each test controls, and `reservations/` receives a fake `now()` so tests move the clock explicitly.
 
 1. **Claims, races and capture (4.2, 4.3 step by step)**
    - 4.2 step 1: expired quote refused; used quote refused.
@@ -231,25 +236,29 @@ Runner: Node's built-in `node:test` via `tsx` (already a server dev dependency);
    - Capture after the PENDING hold passed: no PayPal call; `CANCELLED`; hold released once.
    - Self-hold: capture of a valid PENDING reservation when `stock - held = 0` proceeds.
    - **CAPTURING race:** fake PayPal delays the capture; expiry runs during the delay with the clock past `heldUntil`; the reservation ends `PAID` with `held` unchanged.
+   - **Overlapping captures:** two capture calls overlap; fake PayPal is slow on the first and rejects any second capture call; only one `captureOrder` call is made (the second caller only calls `getOrder`), and the reservation ends `PAID`.
+   - Stale takeover: claim older than `CAPTURE_STALE_SECONDS` with order `APPROVED` → exactly one caller re-captures with the same request id.
    - Unknown outcome: fake capture times out → `CAPTURING` remains, hold kept; "Check payment" with `getOrder` → `COMPLETED` settles to `PAID` without a second capture call.
-   - 4.3 step 7 branches: `getOrder` `COMPLETED` reads the amount without capturing; `APPROVED` while CAPTURING captures; any other status leaves the reservation unchanged.
+   - 4.3 step 4 branches: `getOrder` `COMPLETED` settles without capturing; `APPROVED` with a fresh claim leaves the reservation unchanged; any other status leaves it unchanged.
    - Definite refusal during capture: back to `PENDING` within the hold; `CANCELLED` with release after it.
    - Hold release on every ending: PayPal create error, PENDING timeout, PAID timeout each decrement `held` exactly once, also when expiry runs twice.
-2. **Settlement (4.3 step 8):** capture status `PENDING` → `REVIEW`; same number but different currency → `REVIEW`; different amount → `REVIEW`; expiry with any `HOLD_MINUTES` leaves `REVIEW` and its hold untouched.
+2. **Settlement (4.3 step 7) and review actions:** capture status `PENDING` → `REVIEW`; same number but different currency → `REVIEW`; different amount → `REVIEW`; expiry with any `HOLD_MINUTES` leaves `REVIEW` and its hold untouched; "Accept as paid" → `PAID` with a new `heldUntil`; "Cancel (refunded in PayPal)" → `CANCELLED`, `held` decremented once; either action on a non-REVIEW row changes nothing.
 3. **Expiry:** `HOLD_MINUTES` set very short → `PAID` becomes `EXPIRED`, `held` decremented, item available again.
-4. **Gateway and chat contract:** model fetch returns 502 twice → friendly message, no rows written; a message with role `tool` or non-string content → 400; history over 20 or a message over 1,000 characters → 400; an `activeQuoteId` lets a later turn reserve without the id in any message.
+4. **Gateway and chat contract:** model fetch returns 502 twice → friendly message, no rows written; a message with role `tool` or non-string content → 400; history over 20 or a message over 1,000 characters → 400; an `activeQuoteId` lets a later turn reserve without the id in any message; a used or expired `activeQuoteId` is ignored; a second `createReservation` in one turn is refused; a third PENDING reservation from one IP is refused.
 5. **Collection and editor rules:**
    - `/sale` with `reservationId` uses the quote's rate and price and ignores browser `goldRate` and cart; decrements `stock` and `held`; marks `COLLECTED`.
-   - Second collection with the same reservation → returns the original sale; no second sale row; `stock` and `held` unchanged.
+   - Second collection with the same reservation, run once sequentially and once concurrently → both calls return the same sale; one sale row; `stock` and `held` decremented once.
    - Collection of an `EXPIRED`, `PENDING` or `REVIEW` reservation → 409.
    - Self-hold: collection when `stock - held = 0` because of this reservation's own hold succeeds.
    - Normal sale of a piece whose only unit is held → rejected.
    - Editor: stock below `held` → 409; delete with `held > 0` → 409.
 6. **PayPal client:** amount strings parse to minor units with integer math ("350.00" → 35000, "0.10" → 10, "100" → 10000).
 
-**Manual before recording:** the two day-1 scripts; one end-to-end run on Render with a sandbox buyer (JS SDK loaded with the matching `currency=`); the opening chat prompt checked against the seeded catalog and that day's prices.
+**Manual before recording:** the two day-1 scripts; the `/reserve` processing state (force an unknown capture outcome once); one end-to-end run on Render with a sandbox buyer (JS SDK loaded with the matching `currency=`); the opening chat prompt checked against the seeded catalog and that day's prices.
 
 ## 7. Delivery
 
 - Hosting: Render free tier, catalog reseeded on boot; reservations reset on redeploy or sleep, stated in the judges' testing notes. Check Render's current free-tier limits during day 1.
-- Order of work: day-1 checks → `reservations/` + `paypal/` with tests → agent + `/agent/chat` → `/reserve` and `/reservations` pages, till badge, editor rules, `/sale` collection → hosting → final week: English video (< 3 min), README with "What changed since Oct 6" (citing `redesign-loop` commits), judges' testing notes with sandbox buyer credentials.
+- Order of work: day-1 checks → `reservations/` + `paypal/` with tests → agent + `/agent/chat` → `/reserve` and `/reservations` pages, till badge, editor rules, `/sale` collection → hosting → final week: English video (< 3 min), README with "What changed since Oct 6" (citing `redesign-loop` commits), judges' testing notes with sandbox buyer credentials and a staff login for `/reservations`. Demo pieces are seeded with stock of 2 or more, and the hosted demo runs `PENDING_MINUTES=10`, so one abandoned checkout cannot block the next judge.
+
+**Checkpoint and cuts.** By about hour 20, the happy path (chat → quote → reserve → PayPal sandbox capture → PAID on the staff page → collect) runs end to end on Render. Edge-case tests are written against the real modules as each module is built, not left for the end. If time runs short, cut in this order: the editor UI for held stock (keep the server-side refusals and their tests), the till "Reserved" badge (keep the server-side stock check), the `/reserve` polling (keep the processing message). Never cut the capture, expiry or collection tests: they protect the money.
