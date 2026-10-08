@@ -15,6 +15,8 @@ export type Item = {
   categoryId?: string;
   category?: Category;
   stock: number;
+  /** Units reserved by PENDING/CAPTURING reservations; included on detail/inventory reads that surface holds. */
+  held?: number;
   weight: number; // grams
   purity: number; // fraction of pure gold, e.g. 0.965
   laborFee: number; // THB per piece
@@ -67,6 +69,8 @@ export type Sale = {
   total: number;
   promoCodes: string; // comma-separated codes applied
   saleKey?: string; // echoed back from the server when persisted; absent on legacy rows
+  /** THB already paid via PayPal (reservation collections). 0 for normal sales. */
+  depositPaid?: number;
   lines: SaleLine[];
 };
 

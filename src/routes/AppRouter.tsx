@@ -9,6 +9,7 @@ import StoreProfile from "../pages/storeProfile";
 import PaymentThankYou from "../pages/PaymentThankYou";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
+import ReservePage from "../pages/ReservePage";
 import ProtectedRoute from "../components/Authentication/ProtectedRoute";
 
 export default function AppRouter() {
@@ -19,6 +20,7 @@ export default function AppRouter() {
                     <Routes>
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/register" element={<RegisterPage />} />
+                        <Route path="/reserve" element={<ReservePage />} />
 
                         <Route path="/" element={<ProtectedRoute><ItemSelectionMenu /></ProtectedRoute>} />
                         <Route path="/payment" element={<ProtectedRoute><PaymentCalculation /></ProtectedRoute>} />
