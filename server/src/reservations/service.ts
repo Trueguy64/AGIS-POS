@@ -166,10 +166,12 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
   }
 
   async function acceptReview(id: string) {
+    if (!(await load(id))) throw new ReservationError("NOT_FOUND", "Reservation not found");
     await transition(id, "REVIEW", "PAID", { heldUntil: new Date(now().getTime() + config.holdMinutes * 60_000) });
     return reload(id);
   }
   async function cancelReview(id: string) {
+    if (!(await load(id))) throw new ReservationError("NOT_FOUND", "Reservation not found");
     await transition(id, "REVIEW", "CANCELLED", {}, true);
     return reload(id);
   }
