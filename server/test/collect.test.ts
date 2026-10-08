@@ -60,7 +60,12 @@ test("EXPIRED, PENDING, REVIEW, past heldUntil → 409; amount too low → 400",
   }
   await prisma.reservation.update({ where: { id: rid }, data: { status: "PAID", heldUntil: new Date(Date.now() - 1000) } });
   assert.equal((await collect({ reservationId: rid, payment: "Cash", amountPaid: 50_000 })).status, 409);
-  await prisma.reservation.update({ where: { id: rid }, data: { heldUntil: new Date(Date.now() + 3600_000) } });
+  // /collect ran releaseExpired on the past heldUntil row — status is now EXPIRED and the hold is released.
+  assert.equal((await prisma.reservation.findUniqueOrThrow({ where: { id: rid } })).status, "EXPIRED");
+  assert.equal((await item()).held, 0);
+  // Reset to PAID + future held and restore the hold so the low-amount call can reach the 400 path.
+  await prisma.reservation.update({ where: { id: rid }, data: { status: "PAID", heldUntil: new Date(Date.now() + 3600_000) } });
+  await prisma.item.update({ where: { id: itemId }, data: { held: 1 } });
   assert.equal((await collect({ reservationId: rid, payment: "Cash", amountPaid: 10 })).status, 400);
   assert.equal(await prisma.sale.count(), 0);
 });

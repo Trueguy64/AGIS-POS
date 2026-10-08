@@ -121,9 +121,7 @@ router.post("/collect", authenticate, async (req, res) => {
 
   const existing = await replay();
   if (existing) { res.status(201).json(existing); return; }
-  // Note: no releaseExpired() here — the in-transaction status check (PAID + future heldUntil) is the
-  // source of truth for collect. releaseExpired would mutate the past-heldUntil case to EXPIRED, breaking
-  // the test that exercises both past-heldUntil and amount-too-low in sequence.
+  await getReservations().releaseExpired();
 
   try {
     const sale = await withSqliteRetry(() => prisma.$transaction(async (tx) => {
