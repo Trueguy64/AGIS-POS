@@ -5,7 +5,7 @@ in-chat reservation flow. Everything below is reachable from a single URL after 
 
 ## Live demo
 
-URL: `<fill in after deploy>`
+URL: https://agis-reserve.onrender.com/
 
 The free Render instance sleeps after 15 minutes of inactivity. If the page hangs on the
 first request after a long pause, give it up to **~1 minute** to wake up and refresh —
