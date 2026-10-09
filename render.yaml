@@ -3,7 +3,7 @@ services:
     name: agis-reserve
     runtime: node
     plan: free
-    buildCommand: npm ci --include=dev && npm run build && npm --prefix server ci --include=dev && npm --prefix server exec prisma generate
+    buildCommand: npm ci --include=dev && npm run build && cd server && npm ci --include=dev && npx prisma generate
     startCommand: cd server && npm run start:demo
     envVars:
       - { key: NODE_ENV, value: production }
