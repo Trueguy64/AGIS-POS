@@ -42,13 +42,13 @@ function PaymentThankYou() {
     const pieces = sale.lines.reduce((n, l) => n + l.quantity, 0);
 
     return (
-        <main className="min-h-screen bg-paper p-4 md:p-6 lg:p-8 print:bg-white print:p-0">
+        <main className="flex min-h-screen items-center justify-center bg-paper p-4 md:p-6 lg:p-8 print:block print:bg-white print:p-0">
             {/* Only this block is visible under @media print */}
             <div className="hidden print:block" aria-hidden="true">
                 <PrintableReceipt sale={sale} />
             </div>
 
-            <section className="mx-auto flex max-w-2xl flex-col rounded-slip border border-brass-300 bg-slip p-6 md:p-8 print:hidden" aria-labelledby="paid-title">
+            <section className="mx-auto flex w-full max-w-2xl flex-col rounded-slip border border-brass-300 bg-slip p-6 md:p-8 print:hidden" aria-labelledby="paid-title">
                 <div className="flex flex-col items-start gap-4 sm:flex-row sm:justify-between">
                     <div>
                         <h1 id="paid-title" className="text-display font-bold text-ink"><Bi k="paid" stack /></h1>

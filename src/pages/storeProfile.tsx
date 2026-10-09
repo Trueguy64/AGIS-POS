@@ -58,7 +58,7 @@ function StoreProfile() {
     }
 
     return (
-        <main className="min-h-screen bg-paper p-4 md:p-6 lg:p-8">
+        <main className="flex min-h-screen items-center justify-center bg-paper p-4 md:p-6 lg:p-8">
             <section className="mx-auto flex w-full max-w-xl flex-col rounded-slip border border-brass-300 bg-slip p-6 md:p-8" aria-labelledby="settings-title">
                 <header className="flex items-center gap-3">
                     <button type="button" onClick={() => navigate("/")} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-slip border border-brass-300 text-ink hover:bg-paper" aria-label="Back to the counter">

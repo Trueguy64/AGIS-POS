@@ -26,7 +26,7 @@ function SelectPaymentType() {
     const totals = computeTotals(lines, promos, lock.goldRate);
 
     return (
-        <main className="flex min-h-screen flex-col gap-4 bg-paper p-4 md:flex-row md:items-start md:p-6 lg:gap-5 lg:p-8">
+        <main className="flex min-h-screen flex-col gap-4 bg-paper p-4 md:flex-row md:p-6 lg:gap-5 lg:p-8">
             <PaymentTypes lines={lines} promos={promos} lock={lock} totals={totals} onRelock={relock} />
             <Receipt lines={lines} promos={promos} subtotal={totals.subtotal} discount={totals.discount} total={totals.total} goldRate={lock.goldRate} lockedAt={lock.lockedAt} interactable={false} />
         </main>
