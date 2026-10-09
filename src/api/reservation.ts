@@ -15,7 +15,7 @@ export type QuoteCard = {
 export type ChatResponse = {
   reply: string;
   quote?: QuoteCard;
-  reservation?: { reservationId: string; paypalOrderId: string; currency: string };
+  reservation?: { reservationId: string; ref: string; paypalOrderId: string; currency: string };
 };
 
 export type ReservationStatus =
@@ -41,6 +41,7 @@ export const capture = (id: string) =>
 
 export type StaffReservation = {
   id: string;
+  ref: string;
   status: ReservationStatus;
   customerName: string;
   contact: string;

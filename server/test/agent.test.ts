@@ -16,7 +16,8 @@ function scripted(turns: Block[][]) {
 }
 const fakeRes = {
   quotePrice: async (itemId: string) => { if (itemId !== "I1") throw Object.assign(new Error("No such piece"), { code: "NOT_FOUND" }); return { quoteId: "Q1", itemId: "I1", title: "Chain", priceTHB: 44931, depositTHB: 4493, currency: "THB", depositAmount: "4493.00", expiresAt: "2026-11-01T10:15:00Z" }; },
-  createReservation: async () => ({ reservationId: "R1", paypalOrderId: "O1", currency: "THB" }),
+  createReservation: async () => ({ reservationId: "R1", ref: "R-AAAAR1", paypalOrderId: "O1", currency: "THB" }),
+  findByRef: async () => null,
   activeQuote: async (id: string) => (id === "Q1" ? { quoteId: "Q1", itemId: "I1", title: "Chain", priceTHB: 44931, depositTHB: 4493, currency: "THB", depositAmount: "4493.00", expiresAt: "2026-11-01T10:15:00Z" } : null),
   releaseExpired: async () => 0,
 };
@@ -52,7 +53,7 @@ test("activeQuoteId is injected so a later turn can reserve; used/expired id ign
 
 test("second createReservation in one turn refused; tool loop capped at 5", async () => {
   let made = 0;
-  const res = { ...fakeRes, createReservation: async () => { made++; return { reservationId: "R1", paypalOrderId: "O1", currency: "THB" }; } };
+  const res = { ...fakeRes, createReservation: async () => { made++; return { reservationId: "R1", ref: "R-AAAAR1", paypalOrderId: "O1", currency: "THB" }; } };
   const twice: Block = { type: "tool_use", id: "a", name: "createReservation", input: { quoteId: "Q1", customerName: "A", contact: "a@x.com" } };
   const m = scripted([[twice, { ...twice, id: "b" } as Block], [{ type: "text", text: "done" }]]);
   await createAgent({ call: m.call, reservations: res, searchCatalog: search }).chat({ messages: [{ role: "user", content: "x" }] });
@@ -143,4 +144,14 @@ test("the prompt keeps replies to plain text without links (the page shows its o
   const m = scripted([[{ type: "text", text: "hi" }]]);
   await createAgent({ call: m.call, reservations: fakeRes, searchCatalog: search }).chat({ messages: [{ role: "user", content: "hi" }] });
   assert.match((m.seen[0] as { system: string }).system, /never write links or URLs/i);
+});
+
+test("a customer can look up their reservation by reference", async () => {
+  let asked = "";
+  const res = { ...fakeRes, findByRef: async (ref: string) => { asked = ref; return { ref: "R-ABC123", item: "Chain", status: "PAID", heldUntil: "2026-11-03T10:00:00Z", priceTHB: 44931, depositTHB: 4493, balanceTHB: 40438 }; } };
+  const m = scripted([[{ type: "tool_use", id: "t1", name: "findReservation", input: { ref: "R-ABC123" } }], [{ type: "text", text: "Your chain is held." }]]);
+  const r = await createAgent({ call: m.call, reservations: res, searchCatalog: search }).chat({ messages: [{ role: "user", content: "status of R-ABC123?" }] });
+  assert.equal(asked, "R-ABC123");
+  assert.match(JSON.stringify((m.seen[1] as { messages: unknown[] }).messages.at(-1)), /40438/);
+  assert.equal(r.reply, "Your chain is held.");
 });

@@ -11,7 +11,7 @@ import { clearSession, loadSession, saveSession } from "../lib/reserveSession";
 type Msg = { role: "user" | "assistant"; content: string };
 const POLICY = "The deposit holds this piece and this price for 48 hours. If it is not collected in time, the deposit is forfeited.";
 const STATUS_TEXT: Partial<Record<ReservationStatus, string>> = {
-  PAID: "Deposit paid. Your piece is held for 48 hours — show your name at the counter.",
+  PAID: "Deposit paid. Your piece is held for 48 hours — show this reference at the counter.",
   CAPTURING: "Payment received, confirming with PayPal…",
   REVIEW: "Payment received; the shop will confirm it shortly.",
   PENDING: "The payment did not go through. You can try the PayPal button again.",
@@ -185,12 +185,21 @@ export default function ReservePage() {
 
             {showPay && (
               <div className="self-stretch rounded-slip border border-brass-500 p-4">
-                <p className="font-bold text-ink">Pay the deposit to hold your piece</p>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                  <p className="font-bold text-ink">Pay the deposit to hold your piece</p>
+                  <p className="text-ink-soft">Reference <span className="font-bold text-brass-800 tabular-nums">{reservation.ref}</span></p>
+                </div>
                 {quote && <p className="mb-3 text-ink-soft">{quote.title} · <span className="font-semibold text-ink tabular-nums">{deposit(quote)}</span></p>}
                 <PayPalButton clientId={pay.paypalClientId} currency={reservation.currency} orderId={reservation.paypalOrderId} onApproved={onApproved} onError={onPayError} />
               </div>
             )}
-            {statusText && <p className={`rounded-slip p-3 font-semibold ${status === "PAID" ? "border border-ok text-ok" : "bg-brass-100 text-ink"}`} role="status">{statusText}</p>}
+            {statusText && (
+              <div className={`rounded-slip p-4 ${status === "PAID" ? "border border-ok" : "bg-brass-100"}`} role="status">
+                <p className={`font-semibold ${status === "PAID" ? "text-ok" : "text-ink"}`}>{statusText}</p>
+                {reservation && <p className="mt-2 text-ink-soft">Reference <span className="text-display font-bold text-ink tabular-nums">{reservation.ref}</span></p>}
+                {reservation && status === "PAID" && <p className="mt-1 text-ink-soft">Paste it into this chat any time to check your reservation.</p>}
+              </div>
+            )}
             {status === "PENDING" && attempted && <p className="text-ink-soft">{STATUS_TEXT.PENDING}</p>}
             {error && <p className="rounded-slip bg-stamp-tint px-3 py-2 text-stamp" role="alert">{error}</p>}
             <div ref={end} />

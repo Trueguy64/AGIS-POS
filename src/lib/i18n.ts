@@ -99,6 +99,7 @@ export const S = {
   noReservations: ["ยังไม่มีการจอง", "No reservations yet"], // Thai pending native-speaker review // Thai pending native-speaker review
   reserved: ["จองแล้ว", "Reserved"], // Thai pending native-speaker review
   checkPayment: ["ตรวจการชำระ", "Check payment"], // Thai pending native-speaker review
+  reference: ["เลขอ้างอิง", "Reference"], // Thai pending native-speaker review
   collect: ["รับของ", "Collect"], // Thai pending native-speaker review
   acceptPaid: ["ยืนยันว่าชำระแล้ว", "Accept as paid"], // Thai pending native-speaker review
   cancelRefunded: ["ยกเลิก (คืนเงินใน PayPal แล้ว)", "Cancel (refunded in PayPal)"], // Thai pending native-speaker review

@@ -2,7 +2,7 @@ import { Router, type Response } from "express";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
 import { getReservations, ReservationError } from "../reservations";
-import { configFromEnv } from "../reservations/service";
+import { configFromEnv, reservationRef } from "../reservations/service";
 
 export function sendReservationError(res: Response, err: unknown) {
   if (!(err instanceof ReservationError)) throw err;
@@ -25,7 +25,7 @@ router.post("/:id/capture", async (req, res) => {
 router.get("/", authenticate, async (_req, res) => {
   const rows = await getReservations().list();
   res.json(rows.map((r) => ({
-    id: r.id, status: r.status, customerName: r.customerName, contact: r.contact, itemId: r.itemId, itemTitle: r.item.title,
+    id: r.id, ref: reservationRef(r.id), status: r.status, customerName: r.customerName, contact: r.contact, itemId: r.itemId, itemTitle: r.item.title,
     priceTHB: r.quote.priceSatang / 100, depositTHB: r.quote.depositSatang / 100, heldUntil: r.heldUntil, createdAt: r.createdAt, captureStatus: r.captureStatus,
   })));
 });

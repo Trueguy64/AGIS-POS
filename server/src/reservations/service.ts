@@ -9,6 +9,10 @@ export type ReservationCode = "NOT_FOUND" | "QUOTE_EXPIRED" | "QUOTE_USED" | "UN
 export class ReservationError extends Error {
   constructor(public code: ReservationCode, message: string) { super(message); }
 }
+/** A short code a customer can read out at the counter or paste into the chat: the id's last 6 characters.
+ *  ponytail: suffix of a random cuid, no uniqueness index; findByRef takes the newest on a clash. Add a unique ref column if volumes grow. */
+export const reservationRef = (id: string) => `R-${id.slice(-6).toUpperCase()}`;
+
 export type Config = { depositPercent: number; quoteMinutes: number; pendingMinutes: number; holdMinutes: number; captureStaleSeconds: number; currency: "THB" | "USD"; maxPendingPerIp: number };
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
   const n = (k: string, d: number) => (env[k] ? Number(env[k]) : d);
@@ -95,7 +99,7 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
     const o = await paypal.createOrder(q.depositMinor, q.currency, `create-${r.id}`);
     if (o.kind === "ok") {
       await prisma.reservation.update({ where: { id: r.id }, data: { paypalOrderId: o.value.orderId } });
-      return { reservationId: r.id, paypalOrderId: o.value.orderId, currency: q.currency };
+      return { reservationId: r.id, ref: reservationRef(r.id), paypalOrderId: o.value.orderId, currency: q.currency };
     }
     await transition(r.id, "PENDING", "CANCELLED", {}, true);
     throw new ReservationError("PAYPAL_UNAVAILABLE", "PayPal is unavailable, please try again");
@@ -174,6 +178,18 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
     await transition(id, "REVIEW", "CANCELLED", {}, true);
     return reload(id);
   }
+  /** Public lookup for the chat: what the piece and its status are, never who reserved it. */
+  async function findByRef(input: string) {
+    let code = input.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (code.length === 7 && code.startsWith("R")) code = code.slice(1);
+    if (code.length !== 6) return null;
+    await releaseExpired();
+    const r = await prisma.reservation.findFirst({ where: { id: { endsWith: code.toLowerCase() } }, orderBy: { createdAt: "desc" }, include: { item: true, quote: true } });
+    if (!r) return null;
+    const priceTHB = r.quote.priceSatang / 100, depositTHB = r.quote.depositSatang / 100;
+    return { ref: reservationRef(r.id), item: r.item.title, status: r.status, heldUntil: r.heldUntil.toISOString(), priceTHB, depositTHB, balanceTHB: priceTHB - depositTHB };
+  }
+
   async function list() {
     await releaseExpired();
     return prisma.reservation.findMany({ orderBy: { createdAt: "desc" }, include: { item: true, quote: true }, take: 200 });
@@ -189,5 +205,5 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
     return captureReservation(id);
   }
 
-  return { quotePrice, activeQuote, createReservation, releaseExpired, captureReservation, checkPayment, acceptReview, cancelReview, list };
+  return { quotePrice, activeQuote, createReservation, findByRef, releaseExpired, captureReservation, checkPayment, acceptReview, cancelReview, list };
 }
