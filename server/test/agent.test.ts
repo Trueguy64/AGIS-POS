@@ -106,3 +106,41 @@ test("HTTP chat: no user message at all → 400 Invalid chat request", async () 
   assert.equal(r.status, 400);
   assert.match((await r.json()).message, /Invalid chat request/i);
 });
+
+test("an unknown itemId tells the model to search again for the real id", async () => {
+  const m = scripted([[{ type: "tool_use", id: "t1", name: "quotePrice", input: { itemId: "BAR-1B-965" } }], [{ type: "text", text: "Let me look that up." }]]);
+  await createAgent({ call: m.call, reservations: fakeRes, searchCatalog: search }).chat({ messages: [{ role: "user", content: "Number 1" }] });
+  const toolResult = JSON.stringify((m.seen[1] as { messages: unknown[] }).messages.at(-1));
+  assert.match(toolResult, /searchCatalog/);
+});
+
+test("only one quote per message, so the page and the model agree on the active quote", async () => {
+  let quoted = 0;
+  const res = { ...fakeRes, quotePrice: async (id: string) => { quoted++; return fakeRes.quotePrice(id); } };
+  const q: Block = { type: "tool_use", id: "a", name: "quotePrice", input: { itemId: "I1" } };
+  const m = scripted([[q, { ...q, id: "b" } as Block], [{ type: "text", text: "Here you go." }]]);
+  await createAgent({ call: m.call, reservations: res, searchCatalog: search }).chat({ messages: [{ role: "user", content: "quote both" }] });
+  assert.equal(quoted, 1);
+});
+
+test("the prompt forbids claiming a reservation that the tool did not make", async () => {
+  const m = scripted([[{ type: "text", text: "hi" }]]);
+  await createAgent({ call: m.call, reservations: fakeRes, searchCatalog: search }).chat({ messages: [{ role: "user", content: "hi" }] });
+  assert.match((m.seen[0] as { system: string }).system, /only after createReservation succeeds/i);
+});
+
+test("a failed quote does not use up the message's one quote", async () => {
+  const m = scripted([
+    [{ type: "tool_use", id: "a", name: "quotePrice", input: { itemId: "BAD" } }],
+    [{ type: "tool_use", id: "b", name: "quotePrice", input: { itemId: "I1" } }],
+    [{ type: "text", text: "Here is your quote." }],
+  ]);
+  const r = await createAgent({ call: m.call, reservations: fakeRes, searchCatalog: search }).chat({ messages: [{ role: "user", content: "the chain" }] });
+  assert.equal(r.quote?.quoteId, "Q1");
+});
+
+test("the prompt keeps replies to plain text without links (the page shows its own PayPal button)", async () => {
+  const m = scripted([[{ type: "text", text: "hi" }]]);
+  await createAgent({ call: m.call, reservations: fakeRes, searchCatalog: search }).chat({ messages: [{ role: "user", content: "hi" }] });
+  assert.match((m.seen[0] as { system: string }).system, /never write links or URLs/i);
+});
