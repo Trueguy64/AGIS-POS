@@ -1,5 +1,6 @@
-import PDFDocument from "pdfkit";
-import { join } from "node:path";
+import { bangkokDate, newPdf, thb, when, write } from "./pdfText";
+
+export { bangkokDate };
 
 type Report = {
   from: Date; to: Date;
@@ -7,36 +8,9 @@ type Report = {
   summary: { count: number; pieces: number; subtotal: number; discount: number; depositPaid: number; total: number; cash: number; promptPay: number };
 };
 
-const FONTS = join(import.meta.dirname, "../../assets/fonts");
-const THAI = /([฀-๿]+)/;
-const TZ = "Asia/Bangkok";
-// No ฿: it sits in the Thai block, and a second run breaks right alignment. The header says THB instead.
-const thb = (n: number) => Math.round(n).toLocaleString("en-US");
-const when = (d: Date) => d.toLocaleString("en-GB", { timeZone: TZ, day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-export const bangkokDate = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: TZ }); // YYYY-MM-DD
-
-/** The font files are per-script subsets, so each string is split into Thai and Latin runs.
- *  ponytail: no shaping across runs; fine for names and titles, not for long mixed prose. */
-function write(doc: PDFKit.PDFDocument, s: string, x: number, y: number, o: { bold?: boolean; size?: number; width?: number; align?: "left" | "right" } = {}) {
-  doc.fontSize(o.size ?? 10);
-  const runs = s.split(THAI).filter(Boolean);
-  const opts = { width: o.width, align: o.align, lineBreak: false };
-  runs.forEach((r, i) => {
-    doc.font(`${THAI.test(r) ? "th" : "la"}${o.bold ? "-b" : ""}`);
-    const more = { ...opts, continued: i < runs.length - 1 };
-    if (i === 0) doc.text(r, x, y, more); else doc.text(r, more);
-  });
-}
-
 /** A one-page-per-~35-sales PDF: header, summary, then one row per sale. */
 export function salesPdf(report: Report, generatedBy: string): Promise<Buffer> {
-  const doc = new PDFDocument({ size: "A4", margin: 40 });
-  for (const [name, file] of [["th", "thai-400"], ["la", "latin-400"], ["th-b", "thai-600"], ["la-b", "latin-600"]]) {
-    doc.registerFont(name, join(FONTS, `noto-sans-thai-${file}-normal.woff`));
-  }
-  const chunks: Buffer[] = [];
-  doc.on("data", (c: Buffer) => chunks.push(c));
-  const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
+  const { doc, done } = newPdf();
 
   const left = 40, right = doc.page.width - 40, bottom = doc.page.maxY() - 30; // a row past maxY makes pdfkit start a page per cell
   write(doc, "รายงานยอดขาย Sales report", left, 40, { bold: true, size: 18 });

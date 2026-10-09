@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { RotateCcw, SendHorizontal } from "lucide-react";
+import { FileDown, RotateCcw, SendHorizontal } from "lucide-react";
 import { chat, capture, getPayConfig, type ChatResponse, type QuoteCard, type ReservationStatus } from "../api/reservation";
 import PayPalButton from "../components/reserve/PayPalButton";
 import { RateStamp } from "../components/RateStamp";
@@ -155,7 +155,7 @@ export default function ReservePage() {
               <p key={i} className={`max-w-[85%] whitespace-pre-line rounded-slip px-3 py-2 ${m.role === "user" ? "self-end bg-brass-100 text-ink" : "self-start bg-paper text-ink"}`}><Rich text={m.content} /></p>
             ))}
 
-            {messages.length === 1 && !busy && (
+            {!started && !busy && (
               <div className="flex flex-wrap gap-2" aria-label="Suggestions">
                 {STARTERS.map((s) => (
                   <button key={s} type="button" onClick={() => void say(s)} className="h-11 rounded-slip border border-brass-300 px-3 font-semibold text-brass-800 hover:bg-brass-100">{s}</button>
@@ -198,6 +198,11 @@ export default function ReservePage() {
                 <p className={`font-semibold ${status === "PAID" ? "text-ok" : "text-ink"}`}>{statusText}</p>
                 {reservation && <p className="mt-2 text-ink-soft">Reference <span className="text-display font-bold text-ink tabular-nums">{reservation.ref}</span></p>}
                 {reservation && status === "PAID" && <p className="mt-1 text-ink-soft">Paste it into this chat any time to check your reservation.</p>}
+                {reservation && (status === "PAID" || status === "COLLECTED") && (
+                  <a href={`/api/reservation/${encodeURIComponent(reservation.reservationId)}/receipt.pdf`} download={`AGIS-deposit-${reservation.ref}.pdf`} className="mt-3 inline-flex h-11 items-center gap-2 rounded-slip bg-brass-700 px-4 font-bold text-slip hover:bg-brass-800">
+                    <FileDown size={18} aria-hidden /> Download deposit receipt (PDF)
+                  </a>
+                )}
               </div>
             )}
             {status === "PENDING" && attempted && <p className="text-ink-soft">{STATUS_TEXT.PENDING}</p>}

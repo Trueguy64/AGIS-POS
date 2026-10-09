@@ -4,14 +4,15 @@ import type { PayPal, OrderInfo } from "../paypal/client";
 import { fromMinor } from "../paypal/client";
 import { unitPrice } from "../lib/pricing";
 import { withSqliteRetry } from "../lib/sqliteRetry";
+import { randomInt } from "node:crypto";
 
 export type ReservationCode = "NOT_FOUND" | "QUOTE_EXPIRED" | "QUOTE_USED" | "UNAVAILABLE" | "IP_LIMIT" | "PAYPAL_UNAVAILABLE" | "RATE_UNAVAILABLE" | "INVALID_CUSTOMER" | "BAD_STATE";
 export class ReservationError extends Error {
   constructor(public code: ReservationCode, message: string) { super(message); }
 }
-/** A short code a customer can read out at the counter or paste into the chat: the id's last 6 characters.
- *  ponytail: suffix of a random cuid, no uniqueness index; findByRef takes the newest on a clash. Add a unique ref column if volumes grow. */
-export const reservationRef = (id: string) => `R-${id.slice(-6).toUpperCase()}`;
+/** A short code a customer can read out at the counter or paste into the chat. No 0/O or 1/I, so it survives being read aloud. */
+const REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const randomRef = () => `R-${Array.from({ length: 6 }, () => REF_ALPHABET[randomInt(REF_ALPHABET.length)]).join("")}`;
 
 export type Config = { depositPercent: number; quoteMinutes: number; pendingMinutes: number; holdMinutes: number; captureStaleSeconds: number; currency: "THB" | "USD"; maxPendingPerIp: number };
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
@@ -22,12 +23,12 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): Config {
     currency: env.PAYPAL_CURRENCY === "USD" ? "USD" : "THB", maxPendingPerIp: 2,
   };
 }
-export type Deps = { prisma: PrismaClient; paypal: PayPal; now: () => Date; getRate: () => Promise<{ thbPerGram: number; usdToThb: number }>; config: Config };
+export type Deps = { prisma: PrismaClient; paypal: PayPal; now: () => Date; getRate: () => Promise<{ thbPerGram: number; usdToThb: number }>; config: Config; newRef?: () => string };
 export type QuoteCard = { quoteId: string; itemId: string; title: string; priceTHB: number; depositTHB: number; currency: string; depositAmount: string; expiresAt: string };
 
 const addMin = (d: Date, m: number) => new Date(d.getTime() + m * 60_000);
 
-export function createReservations({ prisma, paypal, now, getRate, config }: Deps) {
+export function createReservations({ prisma, paypal, now, getRate, config, newRef = randomRef }: Deps) {
   const card = (q: Quote & { item: Item }): QuoteCard => ({
     quoteId: q.id, itemId: q.itemId, title: q.item.title, priceTHB: q.priceSatang / 100, depositTHB: q.depositSatang / 100,
     currency: q.currency, depositAmount: fromMinor(q.depositMinor), expiresAt: q.expiresAt.toISOString(),
@@ -81,6 +82,9 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
     if (!q) throw new ReservationError("NOT_FOUND", "Quote not found");
     if (q.reservation) throw new ReservationError("QUOTE_USED", "This quote has already been used");
     if (q.expiresAt <= now()) throw new ReservationError("QUOTE_EXPIRED", "This quote has expired");
+    // 32^6 ≈ 1e9 codes, so a clash is rare; draw again if the code is taken. The unique index is the backstop.
+    let ref = newRef();
+    for (let i = 0; i < 10 && (await prisma.reservation.findUnique({ where: { ref } })); i++) ref = newRef();
     let r: Reservation;
     try {
       r = await withSqliteRetry(() => prisma.$transaction(async (tx) => {
@@ -90,7 +94,7 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
           const live = await tx.reservation.count({ where: { clientIp: input.clientIp, status: { in: ["PENDING", "CAPTURING"] } } });
           if (live >= config.maxPendingPerIp) throw new ReservationError("IP_LIMIT", "Too many unpaid reservations; please pay or wait for them to lapse");
         }
-        return tx.reservation.create({ data: { quoteId: q.id, itemId: q.itemId, customerName, contact, clientIp: input.clientIp, status: "PENDING", heldUntil: addMin(now(), config.pendingMinutes) } });
+        return tx.reservation.create({ data: { ref, quoteId: q.id, itemId: q.itemId, customerName, contact, clientIp: input.clientIp, status: "PENDING", heldUntil: addMin(now(), config.pendingMinutes) } });
       }));
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") throw new ReservationError("QUOTE_USED", "This quote has already been used");
@@ -99,7 +103,7 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
     const o = await paypal.createOrder(q.depositMinor, q.currency, `create-${r.id}`);
     if (o.kind === "ok") {
       await prisma.reservation.update({ where: { id: r.id }, data: { paypalOrderId: o.value.orderId } });
-      return { reservationId: r.id, ref: reservationRef(r.id), paypalOrderId: o.value.orderId, currency: q.currency };
+      return { reservationId: r.id, ref, paypalOrderId: o.value.orderId, currency: q.currency };
     }
     await transition(r.id, "PENDING", "CANCELLED", {}, true);
     throw new ReservationError("PAYPAL_UNAVAILABLE", "PayPal is unavailable, please try again");
@@ -184,10 +188,10 @@ export function createReservations({ prisma, paypal, now, getRate, config }: Dep
     if (code.length === 7 && code.startsWith("R")) code = code.slice(1);
     if (code.length !== 6) return null;
     await releaseExpired();
-    const r = await prisma.reservation.findFirst({ where: { id: { endsWith: code.toLowerCase() } }, orderBy: { createdAt: "desc" }, include: { item: true, quote: true } });
+    const r = await prisma.reservation.findUnique({ where: { ref: `R-${code}` }, include: { item: true, quote: true } });
     if (!r) return null;
     const priceTHB = r.quote.priceSatang / 100, depositTHB = r.quote.depositSatang / 100;
-    return { ref: reservationRef(r.id), item: r.item.title, status: r.status, heldUntil: r.heldUntil.toISOString(), priceTHB, depositTHB, balanceTHB: priceTHB - depositTHB };
+    return { ref: r.ref!, item: r.item.title, status: r.status, heldUntil: r.heldUntil.toISOString(), priceTHB, depositTHB, balanceTHB: priceTHB - depositTHB };
   }
 
   async function list() {

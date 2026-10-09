@@ -2,7 +2,9 @@ import { Router, type Response } from "express";
 import { authenticate } from "../middlewares/authenticate";
 import { authorize } from "../middlewares/authorize";
 import { getReservations, ReservationError } from "../reservations";
-import { configFromEnv, reservationRef } from "../reservations/service";
+import { configFromEnv } from "../reservations/service";
+import { prisma } from "../db";
+import { depositReceiptPdf } from "../lib/depositReceiptPdf";
 
 export function sendReservationError(res: Response, err: unknown) {
   if (!(err instanceof ReservationError)) throw err;
@@ -22,10 +24,19 @@ router.post("/:id/capture", async (req, res) => {
   catch (e) { sendReservationError(res, e); }
 });
 
+// Public, keyed by the unguessable reservation id the customer's page holds (not the short ref, which is meant to be read aloud).
+router.get("/:id/receipt.pdf", async (req, res) => {
+  const r = await prisma.reservation.findUnique({ where: { id: String(req.params.id) }, include: { item: true, quote: true } });
+  if (!r) { res.status(404).json({ message: "Reservation not found" }); return; }
+  if (r.status !== "PAID" && r.status !== "COLLECTED") { res.status(409).json({ message: "The receipt is available once the deposit is paid" }); return; }
+  const pdf = await depositReceiptPdf({ ...r, ref: r.ref ?? r.id });
+  res.type("application/pdf").attachment(`AGIS-deposit-${r.ref ?? r.id}.pdf`).send(pdf);
+});
+
 router.get("/", authenticate, async (_req, res) => {
   const rows = await getReservations().list();
   res.json(rows.map((r) => ({
-    id: r.id, ref: reservationRef(r.id), status: r.status, customerName: r.customerName, contact: r.contact, itemId: r.itemId, itemTitle: r.item.title,
+    id: r.id, ref: r.ref ?? "", status: r.status, customerName: r.customerName, contact: r.contact, itemId: r.itemId, itemTitle: r.item.title,
     priceTHB: r.quote.priceSatang / 100, depositTHB: r.quote.depositSatang / 100, heldUntil: r.heldUntil, createdAt: r.createdAt, captureStatus: r.captureStatus,
   })));
 });

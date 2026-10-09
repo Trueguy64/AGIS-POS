@@ -109,6 +109,7 @@ model Quote {
 
 model Reservation {
   id            String    @id @default(cuid(2))
+  ref           String?   @unique // R-XXXXXX the customer quotes at the counter; nullable only for rows made before it existed
   quoteId       String    @unique
   quote         Quote     @relation(fields: [quoteId], references: [id])
   itemId        String
