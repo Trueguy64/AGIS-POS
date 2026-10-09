@@ -6,14 +6,9 @@ import { listSales, salesPdfUrl, type SalesReport } from "../api/sale";
 import { useAuth } from "../contexts/AuthContext";
 import { receiptNo, thb } from "../lib/gold";
 import { both, th } from "../lib/i18n";
+import { toRange } from "../lib/salesRange";
 
 const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
-/** Local calendar days → [start of `from`, start of the day after `to`) as instants. */
-const toRange = (from: string, to: string) => {
-  const end = new Date(`${to}T00:00`);
-  end.setDate(end.getDate() + 1);
-  return [new Date(`${from}T00:00`).toISOString(), end.toISOString()] as const;
-};
 
 /** Everyone sees the day's sales; only managers get the PDF (the server enforces it too). */
 export default function SalesPage() {
@@ -22,8 +17,9 @@ export default function SalesPage() {
   const [to, setTo] = useState(today);
   const [report, setReport] = useState<SalesReport | null>(null);
   const [error, setError] = useState("");
-  const valid = from !== "" && to !== "" && from <= to;
-  const [fromIso, toIso] = valid ? toRange(from, to) : ["", ""];
+  const range = toRange(from, to);
+  const valid = range !== null;
+  const [fromIso, toIso] = range ?? ["", ""];
 
   useEffect(() => {
     if (!fromIso) return;

@@ -58,3 +58,12 @@ test("a manager gets the PDF report", async () => {
   const bytes = Buffer.from(await r.arrayBuffer());
   assert.equal(bytes.subarray(0, 4).toString(), "%PDF");
 });
+
+test("a long report flows onto pages without spilling cells onto extra ones", async () => {
+  const { salesPdf } = await import("../src/lib/salesPdf");
+  const sales = Array.from({ length: 100 }, (_, i) => ({ id: i + 1, createdAt: new Date("2026-10-01T03:00:00Z"), cashierName: "Somchai", payment: "Cash", pieces: 1, total: 1000 }));
+  const summary = { count: 100, pieces: 100, subtotal: 100_000, discount: 0, depositPaid: 0, total: 100_000, cash: 100_000, promptPay: 0 };
+  const pdf = await salesPdf({ from: new Date("2026-10-01T00:00:00Z"), to: new Date("2026-10-02T00:00:00Z"), sales, summary }, "m@test");
+  const pages = pdf.toString("latin1").match(/\/Type \/Page\b(?!s)/g) ?? [];
+  assert.equal(pages.length, 3); // ~38 rows under the summary, ~49 per later page
+});

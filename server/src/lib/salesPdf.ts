@@ -38,7 +38,7 @@ export function salesPdf(report: Report, generatedBy: string): Promise<Buffer> {
   doc.on("data", (c: Buffer) => chunks.push(c));
   const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
 
-  const left = 40, right = doc.page.width - 40, bottom = doc.page.height - 50;
+  const left = 40, right = doc.page.width - 40, bottom = doc.page.maxY() - 30; // a row past maxY makes pdfkit start a page per cell
   write(doc, "รายงานยอดขาย Sales report", left, 40, { bold: true, size: 18 });
   write(doc, `${when(report.from)} – ${when(new Date(report.to.getTime() - 1))}`, left, 66, { size: 11 });
   write(doc, `Generated ${when(new Date())} by ${generatedBy} · amounts in THB`, left, 82, { size: 9 });
