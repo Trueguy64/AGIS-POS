@@ -3,6 +3,8 @@ import { z } from "zod";
 import { Prisma } from "../generated/prisma/client";
 import { prisma } from "../db";
 import { authenticate } from "../middlewares/authenticate";
+import { authorize } from "../middlewares/authorize";
+import { salesPdf, bangkokDate } from "../lib/salesPdf";
 import { unitPrice } from "../lib/pricing";
 import { getReservations } from "../reservations";
 import { withSqliteRetry } from "../lib/sqliteRetry";
@@ -154,6 +156,49 @@ router.post("/collect", authenticate, async (req, res) => {
     if (status === 500) console.error("[collect]", err);
     res.status(status).json({ message: status === 500 ? "Internal server error" : (err as Error).message });
   }
+});
+
+const rangeSchema = z.object({ from: z.string().datetime(), to: z.string().datetime() })
+  .refine((r) => new Date(r.from) < new Date(r.to), "from must be before to");
+
+/** Sales in [from, to), newest first, with totals. Shared by the on-screen list and the PDF. */
+async function salesReport(query: unknown) {
+  const parsed = rangeSchema.safeParse(query);
+  if (!parsed.success) return null;
+  const from = new Date(parsed.data.from), to = new Date(parsed.data.to);
+  const rows = await prisma.sale.findMany({
+    where: { createdAt: { gte: from, lt: to } },
+    orderBy: { createdAt: "desc" },
+    include: { lines: { select: { quantity: true } } },
+  });
+  const sales = rows.map((s) => ({
+    id: s.id, createdAt: s.createdAt, cashierName: s.cashierName, payment: s.payment,
+    pieces: s.lines.reduce((n, l) => n + l.quantity, 0),
+    subtotal: s.subtotal, discount: s.discount, depositPaid: s.depositPaid, total: s.total,
+  }));
+  const sum = (f: (s: (typeof sales)[number]) => number) => sales.reduce((n, s) => n + f(s), 0);
+  const summary = {
+    count: sales.length, pieces: sum((s) => s.pieces), subtotal: sum((s) => s.subtotal), discount: sum((s) => s.discount),
+    depositPaid: sum((s) => s.depositPaid), total: sum((s) => s.total),
+    cash: sum((s) => (s.payment === "Cash" ? s.total : 0)), promptPay: sum((s) => (s.payment === "PromptPay" ? s.total : 0)),
+  };
+  return { from, to, sales, summary };
+}
+
+// GET /api/sale?from=ISO&to=ISO — any signed-in staff may view sales.
+router.get("/", authenticate, async (req, res) => {
+  const report = await salesReport(req.query);
+  if (!report) { res.status(400).json({ message: "Pick a valid date range" }); return; }
+  res.json(report);
+});
+
+// GET /api/sale/report.pdf?from=ISO&to=ISO — the printable report is for managers only.
+router.get("/report.pdf", authenticate, authorize("Manager"), async (req, res) => {
+  const report = await salesReport(req.query);
+  if (!report) { res.status(400).json({ message: "Pick a valid date range" }); return; }
+  const pdf = await salesPdf(report, req.user!.email);
+  const name = `sales-${bangkokDate(report.from)}-to-${bangkokDate(new Date(report.to.getTime() - 1))}.pdf`;
+  res.type("application/pdf").attachment(name).send(pdf);
 });
 
 router.get("/:id", authenticate, async (req, res) => {
