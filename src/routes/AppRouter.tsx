@@ -11,6 +11,7 @@ import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
 import ReservePage from "../pages/ReservePage";
 import ReservationsPage from "../pages/ReservationsPage";
+import SalesPage from "../pages/SalesPage";
 import ProtectedRoute from "../components/Authentication/ProtectedRoute";
 
 export default function AppRouter() {
@@ -23,6 +24,7 @@ export default function AppRouter() {
                         <Route path="/register" element={<RegisterPage />} />
                         <Route path="/reserve" element={<ReservePage />} />
                         <Route path="/reservations" element={<ProtectedRoute><ReservationsPage /></ProtectedRoute>} />
+                        <Route path="/sales" element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
 
                         <Route path="/" element={<ProtectedRoute><ItemSelectionMenu /></ProtectedRoute>} />
                         <Route path="/payment" element={<ProtectedRoute><PaymentCalculation /></ProtectedRoute>} />

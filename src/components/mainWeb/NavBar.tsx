@@ -34,6 +34,13 @@ function NavBar({ onHamburgerButtonClick, sidebarOpen }: NavBarProps) {
                 <SearchBar />
             </div>
             <Link
+                to="/sales"
+                className="flex h-11 items-center gap-1 rounded-slip px-3 font-semibold hover:bg-brass-800"
+                aria-label={both("sales")}
+            >
+                <Bi k="sales" />
+            </Link>
+            <Link
                 to="/reservations"
                 className="flex h-11 items-center gap-1 rounded-slip px-3 font-semibold hover:bg-brass-800"
                 aria-label={both("reservations")}

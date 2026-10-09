@@ -101,6 +101,14 @@ export const S = {
   collect: ["รับของ", "Collect"], // Thai pending native-speaker review
   acceptPaid: ["ยืนยันว่าชำระแล้ว", "Accept as paid"], // Thai pending native-speaker review
   cancelRefunded: ["ยกเลิก (คืนเงินใน PayPal แล้ว)", "Cancel (refunded in PayPal)"], // Thai pending native-speaker review
+  sales: ["ยอดขาย", "Sales"], // Thai for the sales-report keys pending native-speaker review
+  dateFrom: ["ตั้งแต่", "From"],
+  dateTo: ["ถึง", "To"],
+  salesCount: ["จำนวนบิล", "Sales"],
+  takenAtCounter: ["รับที่หน้าร้าน", "Taken at the counter"],
+  noSales: ["ไม่มียอดขายในช่วงนี้", "No sales in this range"],
+  downloadPdf: ["ดาวน์โหลด PDF", "Download PDF"],
+  time: ["เวลา", "Time"],
   depositPaid: ["มัดจำ PayPal", "PayPal deposit"], // Thai pending native-speaker review
   balance: ["ยอดคงเหลือ", "Balance"], // Thai pending native-speaker review
   held: ["ถูกจอง", "held"], // Thai pending native-speaker review
