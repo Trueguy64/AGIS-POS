@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import Bi from "../components/Bi";
 import CollectDialog from "../components/reservations/CollectDialog";
 import { acceptReview, cancelReview, checkPayment, listReservations, type StaffReservation } from "../api/reservation";
 import { thb } from "../lib/gold";
 import { useAuth } from "../contexts/AuthContext";
+import { both } from "../lib/i18n";
 
 export default function ReservationsPage() {
-  const [rows, setRows] = useState<StaffReservation[]>([]);
+  const [rows, setRows] = useState<StaffReservation[] | null>(null); // null until the first load, so "none" never flashes
   const [collecting, setCollecting] = useState<StaffReservation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
@@ -16,10 +19,16 @@ export default function ReservationsPage() {
 
   return (
     <main className="min-h-screen bg-paper p-4 md:p-6">
-      <h1 className="mb-4 text-display font-bold text-ink"><Bi k="reservations" /></h1>
+      <header className="mb-4 flex items-center gap-3">
+        <Link to="/" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-slip border border-brass-300 text-ink hover:bg-slip" aria-label={both("backToCatalog")}>
+          <ArrowLeft size={20} />
+        </Link>
+        <h1 className="text-display font-bold text-ink"><Bi k="reservations" /></h1>
+      </header>
       {error && <p className="mb-3 text-stamp" role="alert">{error}</p>}
+      {rows?.length === 0 && <p className="text-ink-muted"><Bi k="noReservations" /></p>}
       <ul className="flex flex-col gap-2">
-        {rows.map((r) => (
+        {rows?.map((r) => (
           <li key={r.id} className={`flex flex-wrap items-center gap-3 rounded-slip border bg-slip p-3 ${r.status === "CAPTURING" ? "border-stamp" : r.status === "REVIEW" ? "border-stamp bg-stamp-tint" : "border-brass-300"}`}>
             <span className="w-24 font-semibold">{r.status}</span>
             <span className="flex-1">{r.itemTitle} · {r.customerName} · {r.contact}</span>

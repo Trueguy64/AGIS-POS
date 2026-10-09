@@ -95,7 +95,8 @@ export const S = {
   saleNotFound: ["ไม่พบรายการขายนี้", "This sale could not be found"],
   loadingSale: ["กำลังโหลดใบเสร็จ…", "Loading receipt…"],
   // reservations (Task 10)
-  reservations: ["การจอง", "Reservations"], // Thai pending native-speaker review
+  reservations: ["การจอง", "Reservations"],
+  noReservations: ["ยังไม่มีการจอง", "No reservations yet"], // Thai pending native-speaker review // Thai pending native-speaker review
   reserved: ["จองแล้ว", "Reserved"], // Thai pending native-speaker review
   checkPayment: ["ตรวจการชำระ", "Check payment"], // Thai pending native-speaker review
   collect: ["รับของ", "Collect"], // Thai pending native-speaker review
