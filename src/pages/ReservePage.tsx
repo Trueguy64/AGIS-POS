@@ -1,11 +1,12 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { SendHorizontal } from "lucide-react";
+import { RotateCcw, SendHorizontal } from "lucide-react";
 import { chat, capture, getPayConfig, type ChatResponse, type QuoteCard, type ReservationStatus } from "../api/reservation";
 import PayPalButton from "../components/reserve/PayPalButton";
 import { RateStamp } from "../components/RateStamp";
 import Wordmark from "../components/Wordmark";
 import { useGoldRate } from "../contexts/GoldRateContext";
 import { thb } from "../lib/gold";
+import { clearSession, loadSession, saveSession } from "../lib/reserveSession";
 
 type Msg = { role: "user" | "assistant"; content: string };
 const POLICY = "The deposit holds this piece and this price for 48 hours. If it is not collected in time, the deposit is forfeited.";
@@ -19,6 +20,7 @@ const STATUS_TEXT: Partial<Record<ReservationStatus, string>> = {
   COLLECTED: "This reservation has been collected.",
 };
 const TIMEOUT_TEXT = "Still confirming with PayPal. The shop will see your payment; you can close this page.";
+const GREETING: Msg = { role: "assistant", content: "Hello! I can find a gold piece, quote today's price and hold it for you with a 10% PayPal deposit. What are you looking for?" };
 const STARTERS = ["A 1 baht gold necklace", "A ring under 20,000 THB", "A 10 g gold bar"];
 const STEPS: [string, string][] = [
   ["Describe the piece", "Type, weight or budget — the assistant searches what is in stock."],
@@ -37,12 +39,13 @@ function Rich({ text }: { text: string }) {
 
 export default function ReservePage() {
   const rate = useGoldRate();
-  const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: "Hello! I can find a gold piece, quote today's price and hold it for you with a 10% PayPal deposit. What are you looking for?" }]);
+  const [restored] = useState(() => loadSession(localStorage)); // a refresh or a returning tab picks up where it left off
+  const [messages, setMessages] = useState<Msg[]>(restored?.messages ?? [GREETING]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [quote, setQuote] = useState<QuoteCard | null>(null);
-  const [reservation, setReservation] = useState<ChatResponse["reservation"] | null>(null);
-  const [status, setStatus] = useState<ReservationStatus | null>(null);
+  const [quote, setQuote] = useState<QuoteCard | null>(restored?.quote ?? null);
+  const [reservation, setReservation] = useState<ChatResponse["reservation"] | null>(restored?.reservation ?? null);
+  const [status, setStatus] = useState<ReservationStatus | null>(restored?.status ?? null);
   const [pay, setPay] = useState<{ paypalClientId: string; currency: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempted, setAttempted] = useState(false); // a capture response has come back PENDING (a real refusal)
@@ -98,6 +101,22 @@ export default function ReservePage() {
   }, [reservation]);
   const onPayError = useCallback((m: string) => setError(m), []);
 
+  useEffect(() => { saveSession(localStorage, { messages, quote, reservation, status }); }, [messages, quote, reservation, status]);
+  // Reloaded mid-confirmation: resume polling (capture is safe to repeat). Only once, for the restored state.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current || restored?.status !== "CAPTURING") return;
+    resumed.current = true;
+    void onApproved();
+  }, [restored, onApproved]);
+
+  const startOver = () => {
+    clearSession(localStorage);
+    setMessages([GREETING]); setQuote(null); setReservation(null); setStatus(null);
+    setError(null); setAttempted(false); setTimedOut(false); setInput("");
+  };
+  const started = messages.length > 1 || quote !== null || reservation !== null;
+
   const showPay = reservation && pay && (status === "PENDING" || status === null);
   const statusText = status === "CAPTURING" && timedOut ? TIMEOUT_TEXT : status && status !== "PENDING" ? STATUS_TEXT[status] : null;
 
@@ -127,6 +146,11 @@ export default function ReservePage() {
 
         <section className="flex min-h-[32rem] flex-col rounded-slip border border-brass-300 bg-slip lg:h-[calc(100vh-8rem)]" aria-label="Reservation assistant">
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4 md:p-5" aria-live="polite">
+            {started && !busy && status !== "CAPTURING" && (
+              <button type="button" onClick={startOver} className="flex h-11 items-center gap-2 self-end rounded-slip px-3 font-semibold text-ink-soft hover:bg-paper">
+                <RotateCcw size={16} aria-hidden /> Start over
+              </button>
+            )}
             {messages.map((m, i) => (
               <p key={i} className={`max-w-[85%] whitespace-pre-line rounded-slip px-3 py-2 ${m.role === "user" ? "self-end bg-brass-100 text-ink" : "self-start bg-paper text-ink"}`}><Rich text={m.content} /></p>
             ))}
