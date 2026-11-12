@@ -3,7 +3,7 @@
 **AGIS is a point-of-sale for Thai gold shops, with an in-chat PayPal reservation flow for buyers who are not in the shop.** A tourist, expat or online buyer opens `/reserve`, chats in English with a tool-calling AI agent, gets a live-rate quote for a real piece from the catalog, and pays a 10% PayPal deposit that holds the piece and the quoted price for 48 hours. Staff see the paid booking at `/reservations` and collect the balance at the counter through the existing Cash / PromptPay checkout. Adapted from [CSC105-G01-ONE-POS](https://github.com/Trueguy64/CSC105-G01-ONE-POS) and submitted to the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (deadline 2026-11-12 12:00 PT).
 
 **Live demo, judge logins, and troubleshooting:** see [`docs/hackathon/testing-notes.md`](docs/hackathon/testing-notes.md).
-**Demo video:** `<YouTube link after upload>` (under 3 minutes; see [`docs/hackathon/video-script.md`](docs/hackathon/video-script.md) for the script).
+**Demo video:** https://youtu.be/ymdVkHTdYqU
 
 ## What changed since Oct 6, 2026
 
