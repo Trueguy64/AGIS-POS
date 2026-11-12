@@ -1,5 +1,5 @@
 import { prisma } from "../db";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "../lib/password";
 
 const PLACEHOLDER_IMAGE = "uploads/placeholder.png";
 
@@ -56,7 +56,7 @@ async function main() {
       update: {},
       create: {
         email: process.env.DEMO_STAFF_EMAIL,
-        password: await bcrypt.hash(process.env.DEMO_STAFF_PASSWORD, 10),
+        password: await hashPassword(process.env.DEMO_STAFF_PASSWORD),
         name: "Demo Staff",
         role: "Manager",
       },

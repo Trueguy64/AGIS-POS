@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { getAllCategories } from '../../api/category';
 import { both, th } from '../../lib/i18n';
+import { toggleCategory } from '../../lib/categories';
 
 // The URL is the source of truth: ?search=foo&categories=A,B. Back button and bookmarks just work.
 function SearchBar() {
@@ -38,17 +39,10 @@ function SearchBar() {
         (c) => c.toLowerCase().startsWith(query.toLowerCase()) && !tags.includes(c)
     );
 
-    function setTags(next: string[]) {
-        setSearchParams((prev) => {
-            if (next.length > 0) prev.set("categories", next.join(","));
-            else prev.delete("categories");
-            prev.set("page", "1");
-            return prev;
-        });
-    }
+    const toggleTag = (name: string) => setSearchParams((prev) => toggleCategory(prev, name));
 
     function addTag(name: string) {
-        setTags([...new Set([...tags, name])]);
+        toggleTag(name);
         setDraft(null);
         setIsOpen(false);
         setActive(-1);
@@ -60,7 +54,6 @@ function SearchBar() {
         setSearchParams((prev) => {
             if (query) prev.set("search", query);
             else prev.delete("search");
-            prev.set("page", "1");
             return prev;
         });
         setDraft(null);
@@ -75,7 +68,7 @@ function SearchBar() {
         if (e.key === "Escape") { setIsOpen(false); setActive(-1); return; }
         // Backspace with the caret at position 0 removes the last tag.
         if (e.key === "Backspace" && input.selectionStart === 0 && input.selectionEnd === 0 && tags.length > 0) {
-            setTags(tags.slice(0, -1));
+            toggleTag(tags[tags.length - 1]);
         }
     }
 
@@ -94,7 +87,7 @@ function SearchBar() {
                             <button
                                 type="button"
                                 key={tag}
-                                onClick={() => setTags(tags.filter((t) => t !== tag))}
+                                onClick={() => toggleTag(tag)}
                                 className="group flex h-8 items-center gap-1 rounded-sm bg-brass-100 px-2 font-semibold text-brass-800 hover:bg-brass-300"
                                 aria-label={`${th("remove")} ${tag === "none" ? th("uncategorized") : tag}`}
                             >

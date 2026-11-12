@@ -3,10 +3,9 @@ import { Prisma } from "../generated/prisma/client";
 import type { PayPal, OrderInfo } from "../paypal/client";
 import { fromMinor } from "../paypal/client";
 import { unitPrice } from "../lib/pricing";
-import { withSqliteRetry } from "../lib/sqliteRetry";
 import { randomInt } from "node:crypto";
 
-export type ReservationCode = "NOT_FOUND" | "QUOTE_EXPIRED" | "QUOTE_USED" | "UNAVAILABLE" | "IP_LIMIT" | "PAYPAL_UNAVAILABLE" | "RATE_UNAVAILABLE" | "INVALID_CUSTOMER" | "BAD_STATE";
+export type ReservationCode = "NOT_FOUND" | "QUOTE_EXPIRED" | "QUOTE_USED" | "UNAVAILABLE" | "IP_LIMIT" | "PAYPAL_UNAVAILABLE" | "RATE_UNAVAILABLE" | "INVALID_CUSTOMER";
 export class ReservationError extends Error {
   constructor(public code: ReservationCode, message: string) { super(message); }
 }
@@ -36,14 +35,14 @@ export function createReservations({ prisma, paypal, now, getRate, config, newRe
 
   /** Conditional status change; releases the hold in the same transaction iff the change happened. */
   async function transition(id: string, from: string | string[], to: string, extra: Prisma.ReservationUpdateManyMutationInput = {}, release = false, where: Prisma.ReservationWhereInput = {}) {
-    return withSqliteRetry(() => prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx) => {
       const u = await tx.reservation.updateMany({ where: { id, status: Array.isArray(from) ? { in: from } : from, ...where }, data: { status: to, ...extra } });
       if (u.count === 1 && release) {
         const r = await tx.reservation.findUniqueOrThrow({ where: { id } });
         await tx.item.update({ where: { id: r.itemId }, data: { held: { decrement: 1 } } });
       }
       return u.count === 1;
-    }));
+    });
   }
 
   async function releaseExpired() {
@@ -87,7 +86,7 @@ export function createReservations({ prisma, paypal, now, getRate, config, newRe
     for (let i = 0; i < 10 && (await prisma.reservation.findUnique({ where: { ref } })); i++) ref = newRef();
     let r: Reservation;
     try {
-      r = await withSqliteRetry(() => prisma.$transaction(async (tx) => {
+      r = await prisma.$transaction(async (tx) => {
         const claim = await tx.item.updateMany({ where: { id: q.itemId, stock: { gt: prisma.item.fields.held } }, data: { held: { increment: 1 } } });
         if (claim.count !== 1) throw new ReservationError("UNAVAILABLE", "This piece is no longer available"); // zero-row rule
         if (input.clientIp) {
@@ -95,7 +94,7 @@ export function createReservations({ prisma, paypal, now, getRate, config, newRe
           if (live >= config.maxPendingPerIp) throw new ReservationError("IP_LIMIT", "Too many unpaid reservations; please pay or wait for them to lapse");
         }
         return tx.reservation.create({ data: { ref, quoteId: q.id, itemId: q.itemId, customerName, contact, clientIp: input.clientIp, status: "PENDING", heldUntil: addMin(now(), config.pendingMinutes) } });
-      }));
+      });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") throw new ReservationError("QUOTE_USED", "This quote has already been used");
       throw e;

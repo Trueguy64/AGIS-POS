@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import jwt from "jsonwebtoken";
+import { signToken } from "../src/lib/token";
 import type { AddressInfo } from "node:net";
 
 process.env.JWT_SECRET ??= "test-secret";
@@ -22,7 +22,7 @@ export function fakeClock(start = "2026-11-01T10:00:00.000Z") {
 }
 
 export function authCookie(user: { id?: number; email?: string; role?: "Manager" | "Employee" } = {}) {
-  const token = jwt.sign({ id: user.id ?? 1, email: user.email ?? "staff@test", role: user.role ?? "Manager" }, process.env.JWT_SECRET!);
+  const token = signToken({ id: user.id ?? 1, email: user.email ?? "staff@test", role: user.role ?? "Manager" }, process.env.JWT_SECRET!, 3600);
   return `token=${token}`;
 }
 

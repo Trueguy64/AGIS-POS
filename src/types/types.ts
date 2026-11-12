@@ -90,9 +90,3 @@ export interface User {
   phone: string;
   role: Role;
 }
-
-export interface UserFormData {
-  name: string;
-  email: string;
-  phone: string;
-}

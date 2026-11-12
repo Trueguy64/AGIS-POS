@@ -7,7 +7,6 @@ import { authorize } from "../middlewares/authorize";
 import { salesPdf, bangkokDate } from "../lib/salesPdf";
 import { unitPrice } from "../lib/pricing";
 import { getReservations } from "../reservations";
-import { withSqliteRetry } from "../lib/sqliteRetry";
 
 const saleSchema = z.object({
   payment: z.enum(["Cash", "PromptPay"]),
@@ -126,7 +125,7 @@ router.post("/collect", authenticate, async (req, res) => {
   await getReservations().releaseExpired();
 
   try {
-    const sale = await withSqliteRetry(() => prisma.$transaction(async (tx) => {
+    const sale = await prisma.$transaction(async (tx) => {
       const r = await tx.reservation.findUnique({ where: { id: reservationId }, include: { quote: true, item: true } });
       if (!r) throw Object.assign(new Error("Reservation not found"), { status: 404 });
       if (r.status !== "PAID" || r.heldUntil <= new Date()) throw Object.assign(new Error(`Reservation is ${r.status === "PAID" ? "past its hold" : r.status}; ring it up as a normal sale`), { status: 409 });
@@ -147,7 +146,7 @@ router.post("/collect", authenticate, async (req, res) => {
       });
       await tx.reservation.update({ where: { id: r.id }, data: { saleId: created.id } });
       return created;
-    }));
+    });
     res.status(201).json(sale);
   } catch (err) {
     const again = await replay(); // a concurrent collection won (unique saleKey or the conditional update)

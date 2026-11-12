@@ -25,7 +25,7 @@ export const updateSchema = z.object({
 
 export type LoginFormData = z.infer<typeof loginSchema>;
 export type RegisterFormData = z.infer<typeof registerSchema>;
-export type updateFormData = z.infer<typeof updateSchema>;
+export type UpdateFormData = z.infer<typeof updateSchema>;
 
 /** First validation message per field, for inline form errors. */
 export const fieldErrors = (error: z.ZodError): Record<string, string | undefined> =>

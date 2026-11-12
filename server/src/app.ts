@@ -1,5 +1,4 @@
 import express from "express";
-import cookieParser from "cookie-parser";
 import path from "path";
 import { errorHandler } from "./middlewares/errorHandler";
 import authRouter from "./routes/auth";
@@ -19,7 +18,6 @@ export function createApp() {
   // The browser only ever talks to the Vite dev server, which proxies /api and /uploads here (same origin, no CORS).
   app.use(express.urlencoded({ extended: true }));
   app.use(express.json());
-  app.use(cookieParser());
 
   app.use("/api/auth", authRouter);
   app.use("/api/promo", promoRouter);

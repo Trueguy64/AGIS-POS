@@ -26,7 +26,7 @@ model User {
 // computed on the client and locked onto the receipt at checkout.
 model Item {
   id           String        @id @default(cuid(2))
-  title        String
+  title        String        @unique
   image        String
   description  String?
   categoryId   String?

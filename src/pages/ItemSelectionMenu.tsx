@@ -11,6 +11,7 @@ import type { Category, Item, CartItem } from "../types/types";
 import { getCart, setCart as persistCart } from "../lib/checkout";
 import Bi from "../components/Bi";
 import { both } from "../lib/i18n";
+import { toggleCategory } from "../lib/categories";
 
 function ItemSelectionMenu() {
   // Open on counter screens; closed on phones, where it overlays the grid when toggled.
@@ -68,19 +69,7 @@ function ItemSelectionMenu() {
     setSelectedItem(null);
   };
 
-  const handleCategoryClick = (categoryName: string | null) => {
-    setSearchParams((prev) => {
-      if (categoryName === null) {
-        prev.delete("categories");
-      } else {
-        const currentTags = prev.get("categories")?.split(",").filter(Boolean) || [];
-        const next = currentTags.includes(categoryName) ? currentTags.filter((t) => t !== categoryName) : [...currentTags, categoryName];
-        if (next.length > 0) prev.set("categories", next.join(","));
-        else prev.delete("categories");
-      }
-      return prev;
-    });
-  };
+  const handleCategoryClick = (name: string | null) => setSearchParams((prev) => toggleCategory(prev, name));
 
   const bagCount = cart.reduce((n, c) => n + c.quantity, 0);
 

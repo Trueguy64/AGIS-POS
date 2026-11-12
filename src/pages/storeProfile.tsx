@@ -2,21 +2,20 @@ import { LogOut, RotateCcw, ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import type { UserFormData } from "../types/types";
 import { updateUser, logoutUser } from "../api/user";
-import { updateSchema, fieldErrors } from "../schemas/userSchemas";
+import { updateSchema, fieldErrors, type UpdateFormData } from "../schemas/userSchemas";
 import Field, { authInput } from "../components/Authentication/Field";
 
 function StoreProfile() {
     const { user, updateUser: updateUserContext, logout } = useAuth();
     const navigate = useNavigate();
-    const [form, setForm] = useState<UserFormData>({ name: user?.name ?? "", email: user?.email ?? "", phone: user?.phone ?? "" });
+    const [form, setForm] = useState<UpdateFormData>({ name: user?.name ?? "", email: user?.email ?? "", phone: user?.phone ?? "" });
     const [errors, setErrors] = useState<Record<string, string | undefined>>({});
     const [apiError, setApiError] = useState("");
     const [saved, setSaved] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
-    const set = (key: keyof UserFormData) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const set = (key: keyof UpdateFormData) => (e: React.ChangeEvent<HTMLInputElement>) => {
         setSaved(false);
         setForm({ ...form, [key]: e.target.value });
     };

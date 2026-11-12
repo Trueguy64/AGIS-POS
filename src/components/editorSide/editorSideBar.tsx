@@ -8,8 +8,8 @@ import EditorSidebarCategoryEdit from "./editorSideBarCategoryEdit";
 import EditorSidebarCategoryAdd from "./editorSideBarCategoryAdd";
 import EditorSidebarPromoAdd from "./editorSideBarPromoAdd";
 import EditorSidebarPromoEdit from "./editorSideBarPromoEdit";
-import EditorSwitchCategoryPromo from "./editorSwitchCategoryPromo";
 import { railRow } from "./railStyles";
+import { toggleCategory } from "../../lib/categories";
 
 type SidebarProps = {
   isOpen: boolean;
@@ -34,26 +34,10 @@ function EditorSidebar({ isOpen, categoryArray = [], promoArray = [], onAddCateg
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedCategories = searchParams.get("categories")?.split(",").filter(Boolean) || [];
 
-  const handleCategoryClick = (categoryName: string | null) => {
-    setSearchParams((prev) => {
-      if (categoryName === null) {
-        prev.delete("categories");
-      } else {
-        const currentTags = prev.get("categories")?.split(",") || [];
-        if (currentTags.includes(categoryName)) {
-          const nextTags = currentTags.filter(t => t !== categoryName);
-          if (nextTags.length > 0) prev.set("categories", nextTags.join(","));
-          else prev.delete("categories");
-        } else {
-          currentTags.push(categoryName);
-          prev.set("categories", currentTags.join(","));
-        }
-      }
-      prev.set("page", "1");
-      return prev;
-    });
-  };
+  const handleCategoryClick = (name: string | null) => setSearchParams((prev) => toggleCategory(prev, name));
 
+  const tab = (active: boolean) => `h-11 flex-1 rounded-slip font-semibold ${active ? "bg-brass-100 text-brass-800" : "text-ink hover:bg-paper"}`;
+  const switchTab = (next: typeof activeTab) => { setActiveTab(next); setCreateCategory(false); setEditingCategoryId(null); setCreatePromo(false); setEditingPromo(null); };
   const createRow = "flex h-11 w-full items-center justify-between rounded-slip border border-dashed border-brass-500 px-3 font-semibold text-brass-800 hover:bg-brass-100";
 
   return (
@@ -61,13 +45,10 @@ function EditorSidebar({ isOpen, categoryArray = [], promoArray = [], onAddCateg
       className={`absolute inset-y-0 left-0 z-30 flex h-full shrink-0 flex-col overflow-hidden border-r border-brass-300 bg-slip md:static ${isOpen ? "w-72" : "w-0 border-r-0"}`}
       aria-label="Categories and promotions"
     >
-      <EditorSwitchCategoryPromo activeTab={activeTab} onChange={(tab) => {
-        setActiveTab(tab);
-        setCreateCategory(false);
-        setEditingCategoryId(null);
-        setCreatePromo(false);
-        setEditingPromo(null);
-      }} />
+      <div className="flex gap-1 p-2" role="tablist" aria-label="Editor lists">
+        <button type="button" role="tab" aria-selected={activeTab === "categories"} className={tab(activeTab === "categories")} onClick={() => switchTab("categories")}>Categories</button>
+        <button type="button" role="tab" aria-selected={activeTab === "promotions"} className={tab(activeTab === "promotions")} onClick={() => switchTab("promotions")}>Promotions</button>
+      </div>
 
       {activeTab === "categories" && (
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-2">
@@ -104,6 +85,8 @@ function EditorSidebar({ isOpen, categoryArray = [], promoArray = [], onAddCateg
                 key={category.id}
                 symbol={category.symbol}
                 text={category.name}
+                selected={selectedCategories.includes(category.name)}
+                onClick={() => handleCategoryClick(category.name)}
                 onEditClick={() => setEditingCategoryId(category.id)}
               />
             )

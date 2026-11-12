@@ -23,3 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
+
+# Tool scratch and plugin caches
+.impeccable
+.claude/skills
+
+# Local PayPal sandbox credentials, never committed
+Sandbox Paypal *.txt

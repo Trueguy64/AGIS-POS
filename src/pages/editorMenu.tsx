@@ -6,7 +6,6 @@ import EditorItemAddOverLay from "../components/editorSide/editorItemAddOverlay"
 import EditorItemEditOverLay from "../components/editorSide/editorItemEditOverlay";
 import EditorDeleteConfirmation from "../components/editorSide/editorDeleteConfirmation";
 import EditorItemScroll from "../components/editorSide/editorItemScroll";
-import EditorPageSelector from "../components/editorSide/editorPageSelector";
 import type { Category, Item, Promo } from "../types/types";
 import type { ItemRegisterInput } from "../schemas/itemSchemas";
 import { deleteItem, getInventory, registerItem, updateItem } from "../api/item";
@@ -17,8 +16,6 @@ const errMsg = (err: unknown) => (err instanceof Error ? err.message : String(er
 
 function EditorMenu() {
     const [searchParams, setSearchParams] = useSearchParams();
-    const currentPage = Number(searchParams.get("page")) || 1;
-    const currentRow = Number(searchParams.get("row")) || 25;
     const searchQuery = searchParams.get("search")?.toLowerCase() || "";
     // useMemo so the array reference is stable across renders — otherwise the inventory
     // effect would re-fire on every keystroke / unrelated re-render.
@@ -47,9 +44,7 @@ function EditorMenu() {
             .catch((error) => console.error("Failed to load editor metadata", error));
     }, []);
 
-    // Inventory re-fetches on filter change so the editor never paginates the whole
-    // table on the client (audit 2026-10-08). The endpoint already accepts these params;
-    // pagination (page/row) stays client-side and is a follow-up optimisation.
+    // Inventory re-fetches on filter change; the server does the filtering.
     useEffect(() => {
         let cancelled = false;
         getInventory({ search: searchQuery, categories: selectedCategories })
@@ -61,13 +56,6 @@ function EditorMenu() {
             .catch((error) => { if (!cancelled) console.error("Failed to fetch inventory", error); });
         return () => { cancelled = true; };
     }, [searchQuery, selectedCategories]);
-
-    const currentItems = items?.slice((currentPage - 1) * currentRow, currentPage * currentRow) ?? [];
-    const totalPage = Math.ceil(((items?.length ?? 0) || 1) / currentRow);
-    const globalIndexOf = (index: number) => {
-        const i = items?.findIndex((it) => it.id === currentItems[index]?.id) ?? -1;
-        return i === -1 ? null : i;
-    };
 
     // Promos
     async function handleAddPromo(promo: Omit<Promo, "id">) {
@@ -139,8 +127,6 @@ function EditorMenu() {
         try {
             const created = await registerItem(item, imageFile);
             setItems((prev) => [created, ...prev ?? []]);
-            // Function form preserves the active ?search and ?categories (audit 2026-10-08).
-            setSearchParams((prev) => { prev.set("page", "1"); return prev; });
         } catch (err) {
             alert("Failed to add item: " + errMsg(err));
         }
@@ -188,11 +174,7 @@ function EditorMenu() {
                     onUpdatePromo={handleUpdatePromo}
                     onDeletePromo={handleDeletePromo}
                 />
-                <EditorItemScroll
-                    itemDataArray={currentItems}
-                    onEditItem={(index) => setEditingIndex(globalIndexOf(index))}
-                    onDeleteItem={(index) => setDeletingIndex(globalIndexOf(index))}
-                />
+                <EditorItemScroll itemDataArray={items ?? []} onEditItem={setEditingIndex} onDeleteItem={setDeletingIndex} />
             </div>
 
             {isEditorOverlayOpen && (
@@ -219,8 +201,6 @@ function EditorMenu() {
                     onConfirm={handleDeleteItem}
                 />
             )}
-
-            <EditorPageSelector currentPage={currentPage} currentRow={currentRow} totalPage={totalPage} />
         </div>
     );
 }

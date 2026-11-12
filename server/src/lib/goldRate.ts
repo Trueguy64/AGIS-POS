@@ -33,9 +33,9 @@ export async function getGoldRate(): Promise<GoldRate> {
   return cache.rate;
 }
 
-/** Like {@link getGoldRate} but throws if the cached rate's fetch time is older than `maxAgeMs`. */
-export async function getGoldRateFresh(maxAgeMs = 10 * 60_000, now: () => number = Date.now): Promise<GoldRate> {
+/** Like {@link getGoldRate} but throws if the cached rate is more than 10 minutes old. */
+export async function getGoldRateFresh(): Promise<GoldRate> {
   const rate = await getGoldRate();
-  if (!cache || now() - cache.at > maxAgeMs) throw new Error("Gold rate is stale");
+  if (!cache || Date.now() - cache.at > 10 * 60_000) throw new Error("Gold rate is stale");
   return rate;
 }

@@ -86,7 +86,7 @@ test("normal sale cannot take a held unit", async () => {
 });
 
 test("editor: stock below held, delete with hold, delete with history → 409; quotes cascade", async () => {
-  const patch = await fetch(`${app.base}/api/item/stock/${itemId}`, { method: "PATCH", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ quantity: -1 }) });
+  const patch = await fetch(`${app.base}/api/item/update/${itemId}`, { method: "PATCH", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ stock: 0 }) });
   assert.equal(patch.status, 409);
   assert.equal((await fetch(`${app.base}/api/item/delete/${itemId}`, { method: "DELETE", headers: { cookie } })).status, 409);
   await prisma.reservation.update({ where: { id: rid }, data: { status: "CANCELLED" } });
