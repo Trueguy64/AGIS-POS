@@ -30,8 +30,8 @@ transaction ID and AGIS records it as `PAID`.
 
 The shop-side login uses the demo staff account created on every boot:
 
-- Staff email: `<fill in after deploy>`
-- Staff password: `<fill in after deploy>`
+- Staff email: johndoe@businessexample.com
+- Staff password: 65FYRKD6ZFUXAYJ5
 
 Sign in at `/login`, then open `/reservations` to see the table of recent bookings.
 
