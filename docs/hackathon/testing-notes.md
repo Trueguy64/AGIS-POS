@@ -20,8 +20,8 @@ ephemeral.
 
 Use the PayPal sandbox buyer account on the hosted checkout page to pay the deposit.
 
-- Email: `<fill in after deploy>`
-- Password: `<fill in after deploy>`
+- Email: sb-90rxi53249167@personal.example.com
+- Password: pZ6+7DbY
 
 The deposit is **sandbox money**. No real currency moves; PayPal returns a fake
 transaction ID and AGIS records it as `PAID`.
